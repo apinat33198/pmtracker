@@ -1,4 +1,6 @@
-# systemd unit for a Proxmox LXC or any Linux host.
+# systemd unit for a Proxmox LXC or any Linux host. In an unprivileged LXC,
+# turn on Options > Features > Nesting, or the sandboxing below fails with
+# status=226/NAMESPACE.
 #
 #   useradd --system --home /var/lib/pmtracker --shell /usr/sbin/nologin pmtracker
 #   (build it with a supported Go release, currently 1.26 or 1.27)
@@ -7,9 +9,11 @@
 #   install -m 0640 -o root -g pmtracker config.json service-account.json /etc/pmtracker/
 #   install -d -m 0700 -o pmtracker -g pmtracker /var/lib/pmtracker
 #   cp pmtracker.service /etc/systemd/system/ && systemctl daemon-reload
-#   sudo -u pmtracker pmtracker -config /etc/pmtracker/config.json check
+#   runuser -u pmtracker -- pmtracker -config /etc/pmtracker/config.json check
 #   systemctl enable --now pmtracker
 #   journalctl -u pmtracker | grep setup   # the one-time link for the first admin
+#
+# Later updates from your Mac: deploy/push.sh root@<container>
 
 [Unit]
 Description=PM Tracker (vendor preventive maintenance from Google Calendar)

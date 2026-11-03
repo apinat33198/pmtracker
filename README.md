@@ -236,18 +236,28 @@ go version   # go1.26.x or go1.27.x
 CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o pmtracker ./cmd/pmtracker
 ```
 
-**Proxmox VM with Cloudflare Tunnel** (cloudflared on the same VM)
+**Proxmox container (LXC) with Cloudflare Tunnel**
+
+The container: unprivileged Debian 12 or 13, 1 core, 512 MB, 4 GB disk, with
+**Options, Features, Nesting** turned on. The service's systemd sandboxing
+needs it; without it the service fails with `status=226/NAMESPACE`. The
+clock comes from the Proxmox host, so keep NTP running there. Proxmox backups
+of the container include the data file.
 
 1. In `config.json`: `"listen": "127.0.0.1:8080"` so nothing reaches the
-   tracker except through the tunnel, and `"public_url": "https://pm.example.com"`.
-   Leave `trusted_proxies` at its default: cloudflared connects from
-   loopback, and the lockout uses the visitor's address from Cloudflare.
-2. Install the binary and `deploy/pmtracker.service` as above, start it, and
-   copy the setup link: `journalctl -u pmtracker | grep setup`.
+   tracker except through the tunnel, `"public_url": "https://pm.example.com"`,
+   `"data_file": "/var/lib/pmtracker/data.json"`. Leave `trusted_proxies` at
+   its default: cloudflared in the same container connects from loopback, and
+   the lockout uses the visitor's address from Cloudflare.
+2. Build on your Mac (`GOOS=linux GOARCH=amd64`, see above), copy the binary,
+   config, key and `deploy/pmtracker.service` to the container, and follow the
+   install steps at the top of the unit file. Copy the setup link:
+   `journalctl -u pmtracker | grep setup`.
 3. Create the tunnel. In the Zero Trust dashboard: Networks, Tunnels, create a
-   cloudflared tunnel, run its install command on the VM, and add a public
-   hostname `pm.example.com` → `HTTP` `127.0.0.1:8080`. (Or from the command
-   line with `deploy/cloudflared.yml`.)
+   cloudflared tunnel, run its install command in the container, and add a
+   public hostname `pm.example.com` → `HTTP` `127.0.0.1:8080` (not
+   `localhost`, which can resolve to IPv6 first). Or from the command line
+   with `deploy/cloudflared.yml`.
 4. Open the setup link on `https://pm.example.com/setup?token=…` and create
    the first admin.
 5. Recommended: put a Cloudflare Access application on `pm.example.com`
@@ -255,6 +265,17 @@ CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o pmt
    second check in front of the tracker's own sign-in. If you use the forecast
    feed, add a second Access application for the path `forecast.ics` with a
    **Bypass** policy, since Google Calendar fetches it without signing in.
+
+Updates from your Mac: `deploy/push.sh root@pm-tracker` runs the tests,
+builds, copies the binary, keeps a copy of the data file as
+`data.json.before-update`, and restarts the service.
+
+If cloudflared already runs in **another container**, the tracker has to listen
+on its own address instead: `"listen": "0.0.0.0:8080"`, list the cloudflared
+container's IP in `trusted_proxies`, point the tunnel at
+`http://<tracker container IP>:8080`, and use the Proxmox firewall on the
+tracker container to allow port 8080 from the cloudflared container only, so
+nobody on the LAN can bypass Cloudflare Access.
 
 **Before going live**
 
