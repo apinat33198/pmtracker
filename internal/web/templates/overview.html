@@ -22,7 +22,7 @@
 </nav>
 {{if .Snap.Unconfirmed}}<p class="note">{{.Snap.Unconfirmed}} past {{plural .Snap.Unconfirmed "visit is" "visits are"}} waiting for someone to confirm it happened. Open a site to confirm or mark them missed.</p>{{end}}
 
-<div class="matrix-wrap">
+<div class="matrix-wrap{{if le (len $d.Systems) 6}} fits{{end}}">
 <table class="matrix">
   <thead>
     <tr><th scope="col" class="m-site">Site</th><th scope="col" class="m-last">Last PM</th>{{range $d.Systems}}<th scope="col">{{.Name}}</th>{{end}}</tr>
@@ -54,17 +54,16 @@
   <section>
     <h2>Overdue and the next 30 days</h2>
     <table class="plain upcoming">
-      <thead><tr><th scope="col">Date</th><th scope="col">Site</th><th scope="col">Task</th><th scope="col">Status</th></tr></thead>
+      <thead><tr><th scope="col">Date</th><th scope="col">Task</th><th scope="col">Status</th></tr></thead>
       <tbody>
       {{range $d.Upcoming}}
-        <tr>
+        <tr class="s-{{.Status}}">
           <td data-label="Date"><span class="strong">{{dateShort .ActionDate}}</span>{{if .Booked}}<span class="sub">booked</span>{{else}}<span class="sub{{if lt .DaysLeft 0}} late{{end}}">{{dueRel .DaysLeft}}</span>{{end}}</td>
-          <td data-label="Site"><a href="/sites/{{.Site.ID}}">{{.Site.Code}}</a><span class="sub">{{.Site.Name}}</span></td>
-          <td data-label="Task"><a href="/tasks/{{.Task.ID}}">{{$cat.SystemName .Task.System}}</a><span class="sub">{{$cat.VendorName .Task.Vendor}}</span></td>
+          <td data-label="Task"><a class="task-name" href="/tasks/{{.Task.ID}}"><b>{{.Site.Code}}</b> {{$cat.SystemName .Task.System}}</a><span class="sub"><a href="/sites/{{.Site.ID}}">{{.Site.Name}}</a> · {{$cat.VendorName .Task.Vendor}}</span></td>
           <td data-label="Status"><span class="pill s-{{.Status}}">{{.Status.Short}}</span></td>
         </tr>
       {{else}}
-        <tr><td colspan="4" class="empty">Nothing due or booked in the next 30 days.</td></tr>
+        <tr><td colspan="3" class="empty">Nothing due or booked in the next 30 days.</td></tr>
       {{end}}
       </tbody>
     </table>

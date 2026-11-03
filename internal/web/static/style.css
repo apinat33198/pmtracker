@@ -416,3 +416,27 @@ h2.flush { margin-top: 0; }
 .row-menu form { display: grid; gap: 6px; justify-items: start; margin: 8px 0 0; padding: 10px 12px; background: var(--bg); border-radius: var(--radius); }
 .row-menu label.stack { margin: 0; width: 100%; font-size: 13px; }
 td.actions .row-menu form { display: grid; margin-left: 0; }
+
+/* Overview: task names stand out; a status bar marks each upcoming row. */
+.task-name { color: var(--ink); font-weight: 650; font-size: 14.5px; text-decoration: none; }
+.task-name b { color: var(--brand); font-weight: 750; margin-right: 2px; }
+.task-name:hover { text-decoration: underline; }
+.upcoming .sub a { color: inherit; text-decoration: none; }
+.upcoming .sub a:hover { color: var(--brand); text-decoration: underline; }
+.upcoming tbody tr[class^="s-"] td:first-child { box-shadow: inset 3px 0 0 var(--sc); }
+
+/* Wide screens: the grid's system names stay in view while scrolling. */
+@media (min-width: 961px) {
+  .matrix-wrap.fits { overflow: visible; }
+  .matrix-wrap.fits thead th { top: 0; box-shadow: inset 0 -1px 0 var(--rule); }
+  .matrix-wrap.fits thead th:first-child { border-top-left-radius: var(--radius); }
+  .matrix-wrap.fits thead th:last-child { border-top-right-radius: var(--radius); }
+  .matrix-wrap.fits tbody tr:last-child > :first-child { border-bottom-left-radius: var(--radius); }
+  .matrix-wrap.fits tbody tr:last-child > :last-child { border-bottom-right-radius: var(--radius); }
+}
+.matrix tbody tr:last-child th { border-bottom: 0; }
+@media (max-width: 760px) {
+  /* Stacked rows: the status bar runs down the whole row instead of the date. */
+  .upcoming tbody tr[class^="s-"] { box-shadow: inset 3px 0 0 var(--sc); }
+  .upcoming tbody tr[class^="s-"] td:first-child { box-shadow: none; }
+}
