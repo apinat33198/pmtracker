@@ -41,14 +41,21 @@ if ! ssh -o BatchMode=yes -o ConnectTimeout=8 "$host" true 2>/dev/null; then
 	if ! ls "$HOME"/.ssh/id_*.pub >/dev/null 2>&1; then
 		ssh-keygen -q -t ed25519 -N "" -f "$HOME/.ssh/id_ed25519"
 	fi
-	echo "Type the container's root password once; after this the script logs in with your SSH key."
-	if ! ssh-copy-id -o ConnectTimeout=8 "$host"; then
-		key=$(cat "$(ls "$HOME"/.ssh/id_*.pub | head -1)")
-		die "Couldn't log in with the password. In the container's console (Proxmox > the container > Console) run:
+	pub=$(ls -t "$HOME"/.ssh/id_*.pub | head -1)
+	echo "This Mac's SSH key isn't on the container yet. Trying the root password once"
+	echo "(Debian containers usually refuse root passwords over SSH; if so, see below)."
+	if ! ssh-copy-id -i "$pub" -o NumberOfPasswordPrompts=1 -o ConnectTimeout=8 "$host" 2>/dev/null; then
+		die "The container doesn't accept the root password over SSH (Debian's default), so add this Mac's key once. Either:
 
-  mkdir -p ~/.ssh && chmod 700 ~/.ssh && echo '$key' >> ~/.ssh/authorized_keys
+  a) From this Mac through the Proxmox host (asks for the Proxmox root password; <CTID> is the container's number):
 
-then run this script again."
+     ssh root@<proxmox-host-IP> \"pct exec <CTID> -- sh -c 'mkdir -p -m 700 /root/.ssh && cat >> /root/.ssh/authorized_keys'\" < $pub
+
+  b) Or in the Proxmox web UI: the container > Console, log in as root, and run:
+
+     mkdir -p -m 700 ~/.ssh && echo '$(cat "$pub")' >> ~/.ssh/authorized_keys
+
+Then run this script again."
 	fi
 fi
 ssh -o BatchMode=yes "$host" true || die "Still can't log in to $host with the SSH key."
