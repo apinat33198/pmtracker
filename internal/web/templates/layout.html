@@ -10,6 +10,7 @@
 <body>
 <header class="top">
   <a class="brand" href="/"><svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><rect x="3" y="2" width="16" height="18" rx="3" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="11" cy="6.5" r="1.6" fill="currentColor"/><path d="M7 12h8M7 15.5h5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>PM Tracker</a>
+  {{if not .Bare}}
   <nav class="nav" aria-label="Main">
     <a href="/"{{if eq .Nav "overview"}} aria-current="page"{{end}}>Overview</a>
     <a href="/inbox"{{if eq .Nav "inbox"}} aria-current="page"{{end}}>Review inbox{{with len .Snap.Inbox}} <span class="count">{{.}}</span>{{end}}</a>
@@ -19,10 +20,16 @@
   <div class="top-right">
     <span class="sync-state" title="{{if not .LastSync.IsZero}}{{dateTime .LastSync}}{{end}}">Synced {{ago .LastSync}}</span>
     {{if .IsEditor}}<form method="post" action="/sync"><input type="hidden" name="back" value="{{.Back}}"><button type="submit" class="ghost">Sync now</button></form>{{end}}
-    {{if not .OpenAccess}}<span class="who" title="Signed in as {{.User.Name}}">{{.User.Name}}, {{.User.Role}}</span>{{end}}
+    {{if .User.SignedIn}}
+    <span class="who"><a href="/account"{{if eq .Nav "account"}} aria-current="page"{{end}} title="Your account">{{.User.Name}}</a> <span class="tag">{{.User.Role}}</span></span>
+    <form method="post" action="/logout"><button type="submit" class="ghost">Sign out</button></form>
+    {{else}}
+    <a class="button" href="/login?next={{.Back}}">Sign in</a>
+    {{end}}
   </div>
+  {{end}}
 </header>
-{{if .Demo}}<p class="demo-bar">Demo data: 21 sites with events generated around today. Changes you make are saved to the demo data file.</p>{{else if .OpenAccess}}<p class="demo-bar warn-bar">No users are configured, so anyone who can reach this page is an admin. Add users under auth in the config file, or put the tracker behind an access proxy.</p>{{end}}
+{{if .Demo}}<p class="demo-bar">Demo data: 21 sites with events generated around today. {{if .User.SignedIn}}Changes you make are saved to the demo data file.{{else}}Anyone can look; sign in as admin, editor or viewer (password <b>demo</b>) to make changes.{{end}}</p>{{end}}
 <div class="flashes">
 {{range .SyncErrors}}<p class="flash error" role="alert">Calendar sync is failing. {{.}}</p>{{end}}
 {{with .Msg}}<p class="flash {{$.MsgKind}}" role="status">{{.}}</p>{{end}}

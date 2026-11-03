@@ -28,10 +28,8 @@
   "digest": {"time": "08:00", "telegram_bot_token": "", "telegram_chat_id": ""},
 
   "auth": {
-    "users": [
-      {"username": "admin", "password": "change-me", "role": "admin"},
-      {"username": "facilities", "password": "change-me-too", "role": "editor"},
-      {"username": "manager", "password": "and-me", "role": "viewer"}
-    ]
+    "anonymous_access": "none",
+    "session_hours": 12,
+    "users": []
   }
 }

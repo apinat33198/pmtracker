@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/apinat33198/pmtracker/internal/auth"
 	"github.com/apinat33198/pmtracker/internal/core"
 )
 
@@ -47,6 +48,9 @@ type state struct {
 	Changes   []core.Change             `json:"changes"`
 	Audit     []AuditEntry              `json:"audit"`
 	NextID    int                       `json:"next_id"`
+	Users     []auth.User               `json:"users"`
+	// SessionSecret signs session cookies; generated on first use.
+	SessionSecret []byte `json:"session_secret,omitempty"`
 }
 
 type Store struct {
@@ -465,4 +469,88 @@ func (s *Store) MarkAll(marks []core.VisitMark, action string) error {
 		s.audit(marks[0].By, action)
 	}
 	return s.save()
+}
+
+// Users returns the accounts stored in the data file.
+func (s *Store) Users() []auth.User {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return append([]auth.User(nil), s.st.Users...)
+}
+
+func (s *Store) User(username string) (auth.User, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, u := range s.st.Users {
+		if u.Username == username {
+			return u, true
+		}
+	}
+	return auth.User{}, false
+}
+
+// SaveUser adds or replaces an account.
+func (s *Store) SaveUser(u auth.User, by, action string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	replaced := false
+	for i := range s.st.Users {
+		if s.st.Users[i].Username == u.Username {
+			s.st.Users[i], replaced = u, true
+		}
+	}
+	if !replaced {
+		s.st.Users = append(s.st.Users, u)
+	}
+	if action != "" {
+		s.audit(by, action)
+	}
+	return s.save()
+}
+
+func (s *Store) DeleteUser(username, by string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var out []auth.User
+	for _, u := range s.st.Users {
+		if u.Username != username {
+			out = append(out, u)
+		}
+	}
+	s.st.Users = out
+	s.audit(by, "Deleted the account "+username)
+	return s.save()
+}
+
+// RecordLogin notes a successful sign-in.
+func (s *Store) RecordLogin(username string, at time.Time) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := range s.st.Users {
+		if s.st.Users[i].Username == username {
+			s.st.Users[i].LastLogin = at
+			s.save()
+		}
+	}
+}
+
+// Audit records an action that isn't otherwise stored (failed sign-in lockouts).
+func (s *Store) Log(by, action string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.audit(by, action)
+	return s.save()
+}
+
+// SessionSecret returns the key that signs session cookies, creating it once.
+func (s *Store) SessionSecret() ([]byte, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if len(s.st.SessionSecret) < 32 {
+		s.st.SessionSecret = auth.NewSecret()
+		if err := s.save(); err != nil {
+			return nil, err
+		}
+	}
+	return append([]byte(nil), s.st.SessionSecret...), nil
 }

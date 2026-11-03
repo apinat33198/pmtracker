@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/apinat33198/pmtracker/internal/auth"
 	"github.com/apinat33198/pmtracker/internal/config"
 	"github.com/apinat33198/pmtracker/internal/core"
 )
@@ -26,8 +27,22 @@ func Config() (*config.Config, error) {
 	return config.Parse([]byte(`{
 	  "timezone": "Asia/Bangkok",
 	  "data_file": "pmtracker-demo.json",
-	  "feed": {"token": "demo"}
+	  "feed": {"token": "demo"},
+	  "auth": {"anonymous_access": "viewer"}
 	}`))
+}
+
+// Users are the demo's accounts; every password is "demo".
+func Users(now time.Time) ([]auth.User, error) {
+	hash, err := auth.Hash("demo")
+	if err != nil {
+		return nil, err
+	}
+	var out []auth.User
+	for _, role := range []string{config.RoleAdmin, config.RoleEditor, config.RoleViewer} {
+		out = append(out, auth.User{Username: role, Role: role, PasswordHash: hash, Created: now})
+	}
+	return out, nil
 }
 
 type siteDef struct {

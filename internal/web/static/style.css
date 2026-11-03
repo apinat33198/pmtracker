@@ -392,3 +392,27 @@ div.stack { display: grid; gap: 4px; align-content: start; }
 button[disabled] { opacity: .45; cursor: not-allowed; filter: none; }
 .plain td .sub.warn { color: var(--due_soon); font-weight: 400; }
 .attn { display: block; white-space: nowrap; margin-bottom: 3px; }
+
+/* Sign-in and accounts */
+.auth-card { max-width: 400px; margin: 24px auto 0; padding: 26px 28px; background: var(--surface); border: 1px solid var(--rule); border-radius: var(--radius); }
+.auth-card h1 { margin-bottom: 4px; }
+.auth-card .lede { margin-bottom: 18px; }
+.auth-card .flash { margin: 0 0 14px; }
+.auth-card .check-line { margin: 4px 0 16px; }
+.auth-card > .sub { margin-top: 16px; }
+button.wide { width: 100%; padding-top: 9px; padding-bottom: 9px; }
+.demo-accounts { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--rule); font-size: 13.5px; }
+.demo-accounts p { margin: 0 0 6px; }
+.demo-accounts li { margin: 2px 0; }
+.who a { color: var(--ink); font-weight: 600; text-decoration: none; }
+.who a:hover, .who a[aria-current="page"] { color: var(--brand); text-decoration: underline; }
+.who .tag { margin-left: 4px; }
+.top-right a.button { padding: 5px 12px; font-size: 13.5px; }
+h2.flush { margin-top: 0; }
+.inline-form { display: inline-flex; gap: 6px; align-items: center; margin: 0; }
+.users td { vertical-align: top; }
+.users td.actions { text-align: left; }
+.row-menu summary { margin: 4px 0; font-size: 13px; }
+.row-menu form { display: grid; gap: 6px; justify-items: start; margin: 8px 0 0; padding: 10px 12px; background: var(--bg); border-radius: var(--radius); }
+.row-menu label.stack { margin: 0; width: 100%; font-size: 13px; }
+td.actions .row-menu form { display: grid; margin-left: 0; }

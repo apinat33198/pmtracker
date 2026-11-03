@@ -1,0 +1,20 @@
+{{define "content"}}{{$d := .Data}}
+<section class="auth-card">
+  <h1>Create the first admin</h1>
+  {{if $d.Valid}}
+  <p class="lede">There are no accounts yet. This one can manage sites, vendors and calendars, and add the rest of your team.</p>
+  {{with $d.Error}}<p class="flash error" role="alert">{{.}}</p>{{end}}
+  <form method="post" action="/setup">
+    <input type="hidden" name="token" value="{{$d.Token}}">
+    <label class="stack">Username <input name="username" value="{{$d.Username}}" autocomplete="username" autocapitalize="none" spellcheck="false" required pattern="[a-z0-9][a-z0-9._\-]{1,31}" placeholder="somchai"{{if not $d.Username}} autofocus{{end}}><span class="field-hint">Lowercase letters, digits, dots, dashes or underscores.</span></label>
+    <label class="stack">Password <input name="password" type="password" autocomplete="new-password" required minlength="10"{{if $d.Username}} autofocus{{end}}><span class="field-hint">At least 10 characters. A few unrelated words work well.</span></label>
+    <label class="stack">Password again <input name="confirm" type="password" autocomplete="new-password" required minlength="10"></label>
+    <button type="submit" class="wide">Create admin and sign in</button>
+  </form>
+  {{else}}
+  <p class="lede">There are no accounts yet. To create the first admin, open the setup link from the server's log. It looks like this:</p>
+  <p><code>No accounts yet. Create the first admin at http://…/setup?token=…</code></p>
+  <p class="sub">On a server: <code>journalctl -u pmtracker | grep setup</code>, or <code>docker logs pmtracker</code>. The link stops working once the first admin exists.</p>
+  {{end}}
+</section>
+{{end}}

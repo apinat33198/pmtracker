@@ -7,11 +7,13 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/apinat33198/pmtracker/internal/auth"
 	"github.com/apinat33198/pmtracker/internal/config"
 	"github.com/apinat33198/pmtracker/internal/core"
 	"github.com/apinat33198/pmtracker/internal/demo"
@@ -20,12 +22,27 @@ import (
 )
 
 type env struct {
-	srv   *httptest.Server
-	store *store.Store
+	srv    *httptest.Server
+	store  *store.Store
+	server *Server
 }
 
+func TestMain(m *testing.M) {
+	auth.Iterations = 1000 // keep hashing fast in tests
+	os.Exit(m.Run())
+}
+
+// demoServer serves the demo data. With users nil there is one config
+// account, admin (password "pw"); every request helper signs in with "pw".
 func demoServer(t *testing.T, users []config.User) env {
+	return demoServerWith(t, users, nil)
+}
+
+func demoServerWith(t *testing.T, users []config.User, opts func(*Server)) env {
 	t.Helper()
+	if users == nil {
+		users = []config.User{{Username: "admin", Password: "pw", Role: config.RoleAdmin}}
+	}
 	loc, _ := time.LoadLocation("Asia/Bangkok")
 	now := func() time.Time { return time.Date(2026, 11, 3, 9, 0, 0, 0, loc) }
 	cfg, err := demo.Config()
@@ -33,6 +50,7 @@ func demoServer(t *testing.T, users []config.User) env {
 		t.Fatal(err)
 	}
 	cfg.Auth.Users = users
+	cfg.Auth.AnonymousAccess = config.AnonymousNone
 	cat := demo.Catalog(now())
 	src := demo.NewSource(cfg, &cat, now())
 	st, err := store.Open(filepath.Join(t.TempDir(), "d.json"))
@@ -48,13 +66,16 @@ func demoServer(t *testing.T, users []config.User) env {
 	sy.SyncAll(context.Background())
 	sy.SyncAll(context.Background())
 	s := &Server{Cfg: cfg, Store: st, Syncer: sy, Now: now, Log: quiet, Demo: true}
+	if opts != nil {
+		opts(s)
+	}
 	h, err := s.Handler()
 	if err != nil {
 		t.Fatal(err)
 	}
 	srv := httptest.NewServer(h)
 	t.Cleanup(srv.Close)
-	return env{srv: srv, store: st}
+	return env{srv: srv, store: st, server: s}
 }
 
 var noFollow = &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
@@ -89,7 +110,7 @@ func req(t *testing.T, method, u, user string, form url.Values) (int, string, st
 
 func get(t *testing.T, e env, path string) string {
 	t.Helper()
-	code, body, _ := req(t, "GET", e.srv.URL+path, "", nil)
+	code, body, _ := req(t, "GET", e.srv.URL+path, "admin", nil)
 	if code != 200 {
 		t.Fatalf("GET %s = %d: %.300s", path, code, body)
 	}
@@ -101,7 +122,7 @@ func get(t *testing.T, e env, path string) string {
 
 func post(t *testing.T, e env, path string, form url.Values) string {
 	t.Helper()
-	code, body, msg := req(t, "POST", e.srv.URL+path, "", form)
+	code, body, msg := req(t, "POST", e.srv.URL+path, "admin", form)
 	if code != http.StatusSeeOther && code != 200 {
 		t.Fatalf("POST %s = %d: %.300s", path, code, body)
 	}
@@ -146,8 +167,13 @@ func TestRoles(t *testing.T) {
 		method, path, user string
 		want               int
 	}{
-		{"GET", "/", "", 401},
+		{"GET", "/", "", 303},
+		{"GET", "/admin/sites", "", 303},
+		{"POST", "/inbox/ignore", "", 303},
+		{"GET", "/", "nobody", 401},
 		{"GET", "/forecast.ics?token=demo", "", 200},
+		{"GET", "/forecast.ics?token=wrong", "", 404},
+		{"GET", "/login", "", 200},
 		{"GET", "/", "v", 200},
 		{"GET", "/export.csv", "v", 200},
 		{"POST", "/inbox/ignore", "v", 403},
@@ -276,14 +302,14 @@ func TestAdminSiteLifecycle(t *testing.T) {
 func TestImportAndInbox(t *testing.T) {
 	e := demoServer(t, nil)
 	csv := "site_code,site_name,region,system,vendor,interval_months,last_pm_date\nKBI1,Krabi,South,UPS,Siam UPS Service,3,01/10/2569\nKBI1,,,Fire suppression,FireSafe Co,12,\n"
-	_, body, _ := req(t, "POST", e.srv.URL+"/admin/import", "", url.Values{"csv": {csv}, "mode": {"check"}})
+	_, body, _ := req(t, "POST", e.srv.URL+"/admin/import", "admin", url.Values{"csv": {csv}, "mode": {"check"}})
 	if !strings.Contains(body, "Nothing was saved yet") || !strings.Contains(body, "1 new site") {
 		t.Errorf("check result missing: %.500s", body)
 	}
 	if _, ok := e.store.Catalog().SiteByCode("KBI1"); ok {
 		t.Fatal("check must not save")
 	}
-	_, body, _ = req(t, "POST", e.srv.URL+"/admin/import", "", url.Values{"csv": {csv}, "mode": {"apply"}})
+	_, body, _ = req(t, "POST", e.srv.URL+"/admin/import", "admin", url.Values{"csv": {csv}, "mode": {"apply"}})
 	if !strings.Contains(body, "Imported") {
 		t.Errorf("apply result missing")
 	}

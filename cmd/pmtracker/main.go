@@ -6,9 +6,11 @@
 //	pmtracker -config config.json check   test the service account and calendars
 //	pmtracker -config config.json sync    sync once and exit
 //	pmtracker -config config.json digest  print today's digest
+//	pmtracker hash-password               hash a password for the config file
 package main
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"flag"
@@ -16,11 +18,14 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 	_ "time/tzdata" // the binary works on hosts without zoneinfo
 
+	"github.com/apinat33198/pmtracker/internal/auth"
 	"github.com/apinat33198/pmtracker/internal/config"
 	"github.com/apinat33198/pmtracker/internal/core"
 	"github.com/apinat33198/pmtracker/internal/demo"
@@ -38,7 +43,7 @@ func main() {
 	dataPath := flag.String("data", "", "data file, overrides the config")
 	todayFlag := flag.String("today", "", "pretend today is YYYY-MM-DD (for demos and testing)")
 	flag.Usage = func() {
-		fmt.Fprintf(flag.CommandLine.Output(), "Usage: pmtracker [flags] [serve|check|sync|digest]\n\nFlags:\n")
+		fmt.Fprintf(flag.CommandLine.Output(), "Usage: pmtracker [flags] [serve|check|sync|digest|hash-password]\n\nFlags:\n")
 		flag.PrintDefaults()
 	}
 	flag.Parse()
@@ -47,6 +52,12 @@ func main() {
 		cmd = "serve"
 	}
 	logger := log.New(os.Stderr, "", log.LstdFlags)
+	if cmd == "hash-password" {
+		if err := hashPassword(); err != nil {
+			logger.Fatal(err)
+		}
+		return
+	}
 	if err := run(cmd, *cfgPath, *demoMode, *keep, *addr, *dataPath, *todayFlag, logger); err != nil {
 		logger.Fatal(err)
 	}
@@ -125,6 +136,17 @@ func run(cmd, cfgPath string, demoMode, keep bool, addr, dataPath, todayFlag str
 		})
 		if err != nil {
 			return err
+		}
+	}
+	if demoMode && len(st.Users()) == 0 {
+		users, err := demo.Users(now())
+		if err != nil {
+			return err
+		}
+		for _, u := range users {
+			if err := st.SaveUser(u, "system", ""); err != nil {
+				return err
+			}
 		}
 	}
 	syncer := &gcal.Syncer{Store: st, Source: src, Cfg: cfg, Now: now, Log: logger}
@@ -256,4 +278,43 @@ func check(ctx context.Context, cfg *config.Config, st *store.Store, src gcal.So
 		return errors.New("check failed")
 	}
 	return nil
+}
+
+// hashPassword reads a password from stdin and prints its hash for the
+// password field of a user in the config file.
+func hashPassword() error {
+	tty := false
+	if fi, err := os.Stdin.Stat(); err == nil && fi.Mode()&os.ModeCharDevice != 0 {
+		tty = true
+		fmt.Fprint(os.Stderr, "Password: ")
+		if err := stty("-echo"); err == nil {
+			defer stty("echo")
+		}
+	}
+	line, err := bufio.NewReader(os.Stdin).ReadString('\n')
+	if err != nil && line == "" {
+		return errors.New("no password given")
+	}
+	if tty {
+		fmt.Fprintln(os.Stderr)
+	}
+	pw := strings.TrimRight(line, "\r\n")
+	if pw == "" {
+		return errors.New("no password given")
+	}
+	if msg := auth.CheckPassword(pw, ""); msg != "" {
+		fmt.Fprintf(os.Stderr, "Warning: %s\n", msg)
+	}
+	h, err := auth.Hash(pw)
+	if err != nil {
+		return err
+	}
+	fmt.Println(h)
+	return nil
+}
+
+func stty(arg string) error {
+	cmd := exec.Command("stty", arg)
+	cmd.Stdin = os.Stdin
+	return cmd.Run()
 }

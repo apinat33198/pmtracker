@@ -1,0 +1,7 @@
+{{define "content"}}{{$d := .Data}}
+<section class="page-head">
+  <h1>Not allowed</h1>
+  <p class="lede">This needs {{index $d "Need"}} access, and your account ({{index $d "Name"}}) is {{index $d "Role"}}. Ask an admin if you need it.</p>
+</section>
+<p><a class="button ghost" href="/">Back to the overview</a></p>
+{{end}}

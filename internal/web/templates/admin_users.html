@@ -1,0 +1,56 @@
+{{define "content"}}{{$d := .Data}}
+{{template "adminnav" "users"}}
+<section class="page-head">
+  <h1>Users</h1>
+  <p class="lede">Who can sign in, and what they can do. <b>Viewers</b> see everything and export. <b>Editors</b> also review the inbox, confirm visits and add past visits. <b>Admins</b> also manage sites, tasks, vendors, calendars and users.</p>
+  <p class="hint small">{{if eq $d.Anon "viewer"}}People who haven't signed in can view the pages but can't change anything.{{else}}Every page needs a sign-in.{{end}} Five wrong passwords in a row block that username from that address for 15 minutes.</p>
+</section>
+{{with $d.Plain}}<p class="flash error">The config file holds plain-text passwords for {{join . ", "}}. Replace each with the output of <code>pmtracker hash-password</code>.</p>{{end}}
+
+<table class="plain users">
+  <thead><tr><th scope="col">User</th><th scope="col">Role</th><th scope="col">Last sign-in</th><th scope="col"><span class="vh">Actions</span></th></tr></thead>
+  <tbody>
+  {{range $d.Accounts}}{{$name := .Username}}
+    <tr>
+      <td data-label="User"><span class="strong">{{.Username}}</span>{{if eq .Username $d.Me}} <span class="tag">you</span>{{end}}<span class="sub">{{if .Config}}Config file{{else}}Added {{date .Created}}{{end}}</span></td>
+      <td data-label="Role">
+        {{if .Config}}{{.Role}}
+        {{else}}
+        <form class="inline-form" method="post" action="/admin/users/{{.Username}}/role">
+          <select name="role" aria-label="Role for {{.Username}}">{{$role := .Role}}{{range $d.Roles}}<option value="{{.}}"{{if eq . $role}} selected{{end}}>{{.}}</option>{{end}}</select>
+          <button class="ghost">Change</button>
+        </form>
+        {{end}}
+      </td>
+      <td data-label="Last sign-in">{{if .Config}}<span class="sub inline">Not tracked</span>{{else if .LastLogin.IsZero}}<span class="sub inline">Never</span>{{else}}{{ago .LastLogin}}<span class="sub">{{dateTime .LastLogin}}</span>{{end}}</td>
+      <td class="actions">
+        {{if not .Config}}
+        <details class="row-menu">
+          <summary>Password or delete</summary>
+          <form method="post" action="/admin/users/{{.Username}}/password">
+            <label class="stack">New password for {{.Username}} <input name="password" type="password" autocomplete="new-password" required minlength="10"></label>
+            <button>Set password</button>
+            <span class="field-hint">Signs {{if eq .Username $d.Me}}your other devices{{else}}them{{end}} out everywhere.</span>
+          </form>
+          {{if ne .Username $d.Me}}
+          <form method="post" action="/admin/users/{{.Username}}/delete">
+            <button class="danger-button"{{if and (eq .Role "admin") (le $d.Admins 1)}} disabled title="The only admin can't be deleted"{{end}}>Delete {{.Username}}</button>
+          </form>
+          {{end}}
+        </details>
+        {{end}}
+      </td>
+    </tr>
+  {{end}}
+  </tbody>
+</table>
+
+<h2>Add a user</h2>
+<form class="row-form" method="post" action="/admin/users">
+  <label>Username <input name="username" required autocomplete="off" autocapitalize="none" spellcheck="false" pattern="[a-z0-9][a-z0-9._\-]{1,31}" placeholder="nok.s"></label>
+  <label>Role <select name="role">{{range $d.Roles}}<option value="{{.}}"{{if eq . "viewer"}} selected{{end}}>{{.}}</option>{{end}}</select></label>
+  <label class="grow">Password <input name="password" type="password" autocomplete="new-password" required minlength="10"></label>
+  <button>Add user</button>
+</form>
+<p class="hint small">Passwords need at least 10 characters. Tell the person their password; they can change it under Your account (click their name at the top right).</p>
+{{end}}

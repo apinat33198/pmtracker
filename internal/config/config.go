@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -71,8 +72,16 @@ type Digest struct {
 }
 
 type Auth struct {
-	// Users for HTTP basic auth. With no users, everyone is an admin: run it
-	// behind Cloudflare Access, Tailscale or a VPN in that case.
+	// AnonymousAccess is what visitors who haven't signed in may do:
+	// "none" (the default; sign-in required for every page) or "viewer"
+	// (read-only pages open, sign-in needed to make changes).
+	AnonymousAccess string `json:"anonymous_access"`
+	// SessionHours is how long a sign-in lasts without "keep me signed in" (default 12).
+	SessionHours int `json:"session_hours"`
+	// Users defined here are optional: accounts are normally managed under
+	// Admin, Users. A config user works as a break-glass account that can't
+	// be changed from the web. Password may be a hash from
+	// "pmtracker hash-password" (recommended) or plain text.
 	Users []User `json:"users"`
 }
 
@@ -81,6 +90,12 @@ type User struct {
 	Password string `json:"password"`
 	Role     string `json:"role"`
 }
+
+// Anonymous access levels.
+const (
+	AnonymousNone   = "none"
+	AnonymousViewer = "viewer"
+)
 
 func Load(path string) (*Config, error) {
 	b, err := os.ReadFile(path)
@@ -148,10 +163,22 @@ func (c *Config) finish() error {
 		}
 		c.holidays[h] = true
 	}
+	switch c.Auth.AnonymousAccess {
+	case "":
+		c.Auth.AnonymousAccess = AnonymousNone
+	case AnonymousNone, AnonymousViewer:
+	default:
+		errs = append(errs, `auth.anonymous_access must be "none" or "viewer"`)
+	}
+	if c.Auth.SessionHours <= 0 {
+		c.Auth.SessionHours = 12
+	}
 	seen := map[string]bool{}
 	for i, u := range c.Auth.Users {
 		if u.Username == "" || u.Password == "" {
 			errs = append(errs, "every user needs a username and a password")
+		} else if !usernameRe.MatchString(u.Username) {
+			errs = append(errs, fmt.Sprintf("user %q: usernames are 2-32 lowercase letters, digits, dot, dash or underscore", u.Username))
 		}
 		if seen[u.Username] {
 			errs = append(errs, fmt.Sprintf("duplicate user %q", u.Username))
@@ -173,6 +200,8 @@ func (c *Config) finish() error {
 	}
 	return nil
 }
+
+var usernameRe = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{1,31}$`)
 
 // RoleRank orders roles; -1 for unknown.
 func RoleRank(role string) int {

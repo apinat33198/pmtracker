@@ -1,0 +1,26 @@
+{{define "content"}}{{$a := .Data}}
+<section class="page-head">
+  <h1>Your account</h1>
+  <p class="lede">Signed in as <b>{{$a.Username}}</b>, {{$a.Role}}.{{if not $a.LastLogin.IsZero}} Last sign-in {{dateTime $a.LastLogin}}.{{end}}</p>
+</section>
+{{if $a.Config}}
+<p class="note">This account is defined in the config file, so its password is changed there. Use <code>pmtracker hash-password</code> to make a hash to paste in instead of the plain password.</p>
+{{else}}
+<div class="two-col">
+  <form class="panel" method="post" action="/account/password">
+    <h2 class="flush">Change password</h2>
+    <input type="text" name="username" value="{{$a.Username}}" autocomplete="username" hidden>
+    <label class="stack">Current password <input name="current" type="password" autocomplete="current-password" required></label>
+    <label class="stack">New password <input name="password" type="password" autocomplete="new-password" required minlength="10"><span class="field-hint">At least 10 characters.</span></label>
+    <label class="stack">New password again <input name="confirm" type="password" autocomplete="new-password" required minlength="10"></label>
+    <button type="submit">Change password</button>
+    <p class="sub">This also signs you out on your other devices.</p>
+  </form>
+  <form class="panel" method="post" action="/account/signout-others">
+    <h2 class="flush">Other devices</h2>
+    <p class="hint">Left yourself signed in on a shared or lost computer? End every session except this one.</p>
+    <button type="submit" class="ghost">Sign out everywhere else</button>
+  </form>
+</div>
+{{end}}
+{{end}}

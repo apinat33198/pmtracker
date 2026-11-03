@@ -16,8 +16,10 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
+	"github.com/apinat33198/pmtracker/internal/auth"
 	"github.com/apinat33198/pmtracker/internal/config"
 	"github.com/apinat33198/pmtracker/internal/core"
 	"github.com/apinat33198/pmtracker/internal/gcal"
@@ -39,27 +41,20 @@ type Server struct {
 	Demo           bool
 	ServiceAccount string
 
-	pages map[string]*template.Template
-}
-
-type ctxKey struct{}
-
-type user struct {
-	Name string
-	Role string
-}
-
-func (u user) can(role string) bool { return config.RoleRank(u.Role) >= config.RoleRank(role) }
-
-func userOf(r *http.Request) user {
-	if u, ok := r.Context().Value(ctxKey{}).(user); ok {
-		return u
-	}
-	return user{Name: "anonymous", Role: config.RoleViewer}
+	pages      map[string]*template.Template
+	secret     []byte
+	limiter    *auth.Limiter
+	setupToken string
+	setupMu    sync.Mutex
+	dummyHash  string
+	dummyOnce  sync.Once
 }
 
 func (s *Server) Handler() (http.Handler, error) {
 	if err := s.parse(); err != nil {
+		return nil, err
+	}
+	if err := s.initAuth(); err != nil {
 		return nil, err
 	}
 	mux := http.NewServeMux()
@@ -67,6 +62,11 @@ func (s *Server) Handler() (http.Handler, error) {
 	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServerFS(static)))
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) { w.Write([]byte("ok\n")) })
 	mux.HandleFunc("GET /forecast.ics", s.feed)
+	mux.HandleFunc("GET /login", s.loginPage)
+	mux.HandleFunc("POST /login", s.login)
+	mux.HandleFunc("POST /logout", s.logout)
+	mux.HandleFunc("GET /setup", s.setupPage)
+	mux.HandleFunc("POST /setup", s.setup)
 
 	v, e, a := config.RoleViewer, config.RoleEditor, config.RoleAdmin
 	handle := func(pattern, role string, h http.HandlerFunc) { mux.Handle(pattern, s.need(role, h)) }
@@ -78,6 +78,9 @@ func (s *Server) Handler() (http.Handler, error) {
 	handle("GET /events", v, s.events)
 	handle("GET /export.csv", v, s.exportCSV)
 	handle("GET /digest.txt", v, s.digestText)
+	handle("GET /account", v, s.accountPage)
+	handle("POST /account/password", v, s.changeOwnPassword)
+	handle("POST /account/signout-others", v, s.signOutOthers)
 
 	handle("POST /sync", e, s.syncNow)
 	handle("POST /inbox/link", e, s.link)
@@ -115,54 +118,13 @@ func (s *Server) Handler() (http.Handler, error) {
 	handle("POST /admin/import", a, s.adminImportPost)
 	handle("GET /admin/import/template.csv", a, s.adminImportTemplate)
 	handle("GET /admin/activity", a, s.adminActivity)
+	handle("GET /admin/users", a, s.adminUsers)
+	handle("POST /admin/users", a, s.adminAddUser)
+	handle("POST /admin/users/{name}/role", a, s.adminSetRole)
+	handle("POST /admin/users/{name}/password", a, s.adminResetPassword)
+	handle("POST /admin/users/{name}/delete", a, s.adminDeleteUser)
 
 	return s.authenticate(mux), nil
-}
-
-// authenticate resolves the user (basic auth when users are configured,
-// otherwise everyone is an admin) and rejects cross-site form posts.
-func (s *Server) authenticate(next http.Handler) http.Handler {
-	users := s.Cfg.Auth.Users
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		open := r.URL.Path == "/forecast.ics" || r.URL.Path == "/healthz" || strings.HasPrefix(r.URL.Path, "/static/")
-		u := user{Name: "anonymous", Role: config.RoleAdmin}
-		if len(users) > 0 && !open {
-			name, pass, ok := r.BasicAuth()
-			found := false
-			if ok {
-				for _, cu := range users {
-					if subtle.ConstantTimeCompare([]byte(name), []byte(cu.Username)) == 1 &&
-						subtle.ConstantTimeCompare([]byte(pass), []byte(cu.Password)) == 1 {
-						u, found = user{Name: cu.Username, Role: cu.Role}, true
-					}
-				}
-			}
-			if !found {
-				w.Header().Set("WWW-Authenticate", `Basic realm="PM Tracker", charset="UTF-8"`)
-				http.Error(w, "Sign in to use the PM tracker.", http.StatusUnauthorized)
-				return
-			}
-		}
-		if r.Method == http.MethodPost {
-			if o := r.Header.Get("Origin"); o != "" {
-				if ou, err := url.Parse(o); err != nil || ou.Host != r.Host {
-					http.Error(w, "Cross-site form posts are not allowed.", http.StatusForbidden)
-					return
-				}
-			}
-		}
-		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), ctxKey{}, u)))
-	})
-}
-
-func (s *Server) need(role string, h http.HandlerFunc) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if u := userOf(r); !u.can(role) {
-			http.Error(w, fmt.Sprintf("Your account (%s, %s) can't do this. Ask an admin for %s access.", u.Name, u.Role, role), http.StatusForbidden)
-			return
-		}
-		h(w, r)
-	})
 }
 
 // --- templates ---
@@ -244,12 +206,12 @@ type page struct {
 	Nav        string
 	Back       string
 	Demo       bool
+	Bare       bool // sign-in and setup pages: no navigation
 	Msg        string
 	MsgKind    string
 	User       user
 	IsEditor   bool
 	IsAdmin    bool
-	OpenAccess bool
 	Snap       core.Snapshot
 	Cat        *core.Catalog
 	Cfg        *config.Config
@@ -261,9 +223,15 @@ type page struct {
 func (s *Server) snapshot() core.Snapshot { return core.Build(s.Cfg, s.Store.Inputs(), s.Now()) }
 
 func (s *Server) render(w http.ResponseWriter, r *http.Request, name, nav, title string, snap core.Snapshot, data any) {
+	s.renderCode(w, r, http.StatusOK, name, nav, title, snap, data)
+}
+
+// renderCode renders a page with a status code. A snapshot without a
+// catalog renders a bare page (sign-in, setup) with no navigation.
+func (s *Server) renderCode(w http.ResponseWriter, r *http.Request, code int, name, nav, title string, snap core.Snapshot, data any) {
 	u := userOf(r)
 	p := page{Title: title, Nav: nav, Demo: s.Demo, Snap: snap, Cat: snap.Catalog, Cfg: s.Cfg, Data: data, User: u,
-		IsEditor: u.can(config.RoleEditor), IsAdmin: u.can(config.RoleAdmin), OpenAccess: len(s.Cfg.Auth.Users) == 0,
+		IsEditor: u.can(config.RoleEditor), IsAdmin: u.can(config.RoleAdmin), Bare: snap.Catalog == nil,
 		Msg: r.URL.Query().Get("msg"), MsgKind: r.URL.Query().Get("kind")}
 	q := r.URL.Query()
 	q.Del("msg")
@@ -272,7 +240,11 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, name, nav, title
 	if enc := q.Encode(); enc != "" {
 		p.Back += "?" + enc
 	}
-	for _, c := range snap.Catalog.Calendars {
+	var cals []core.Calendar
+	if snap.Catalog != nil {
+		cals = snap.Catalog.Calendars
+	}
+	for _, c := range cals {
 		st := s.Store.CalendarState(c.ID)
 		if st.LastSyncedAt.After(p.LastSync) {
 			p.LastSync = st.LastSyncedAt
@@ -293,6 +265,7 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, name, nav, title
 		http.Error(w, "This page failed to render: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
+	w.WriteHeader(code)
 	buf.WriteTo(w)
 }
 

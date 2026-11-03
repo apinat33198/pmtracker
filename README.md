@@ -31,6 +31,9 @@ overview.
 go run ./cmd/pmtracker -demo        # http://localhost:8080
 ```
 
+Anyone can look around the demo. To change things, sign in as `admin`,
+`editor` or `viewer`, all with the password `demo`.
+
 The demo has 21 sites in six regions. Each site has DC power by VoltEdge, UPS
 by ABC Power or Siam UPS (by region), and CRAC by CoolAir, Northern Cooling or
 Andaman HVAC. Five sites also have a generator, and BKK2 has a second UPS room
@@ -81,7 +84,7 @@ for each system in one step.
    (`…@….iam.gserviceaccount.com`) with **See all event details**.
    Workspace admins may need to allow sharing outside the domain.
 3. Copy `config.example.json` to `config.json`, set `google.credentials_file`
-   and users, and list your calendars (or add them later under
+   and `public_url`, and list your calendars (or add them later under
    **Admin, Calendars and sync**).
 4. Check, then run:
 
@@ -89,6 +92,9 @@ for each system in one step.
 pmtracker -config config.json check   # verifies the key and every calendar, prints match counts
 pmtracker -config config.json         # serve on :8080, sync every 15 minutes
 ```
+
+The first start prints a setup link for creating the first admin (see
+[Sign-in and users](#sign-in-and-users)).
 
 A calendar can be marked **every event is a PM visit**, or tied to one site,
 for a site that keeps its own calendar.
@@ -135,19 +141,75 @@ also matches titles that mean "data centre".
 - Past calendar visits count as done until someone marks them missed.
   Cancelled events don't count.
 
-## Users and roles
+## Sign-in and users
 
-`auth.users` in the config sets HTTP basic-auth users:
+Every page needs a sign-in, and the admin pages need an admin.
 
 | Role | Can |
 | --- | --- |
 | viewer | see everything, export CSV |
 | editor | also work the review inbox, confirm or mark visits missed, record visits by hand, sync now |
-| admin | also manage sites, tasks, vendors, systems, calendars, import, see the activity log |
+| admin | also manage sites, tasks, vendors, systems, calendars, users, import, see the activity log |
 
-With no users configured everyone is an admin and the page says so. That's
-only for use behind Cloudflare Access, Tailscale or a VPN. Passwords are
-plain text in the config for this version, so keep the file `chmod 640`.
+**First run.** With no accounts, the server prints a one-time link to its log:
+
+```
+No accounts yet. Create the first admin at https://pm.example.com/setup?token=…
+```
+
+Open it, pick a username and password, and you're signed in as the first admin.
+Every other page redirects to `/setup` until then, and the link stops working
+once that account exists. On a server: `journalctl -u pmtracker | grep setup`,
+or `docker logs pmtracker`.
+
+**Accounts** live in the data file and are managed under **Admin, Users**: add
+someone with a role and a starting password, change roles, set a new password
+(signs them out everywhere), or delete them. The last admin can't be demoted
+or deleted, and nobody can delete their own account. Each person can change
+their password and sign out other devices under **Your account** (their name,
+top right).
+
+**How it's protected**
+
+- Passwords are stored as PBKDF2-SHA256 hashes (600,000 iterations, random salt);
+  new ones need at least 10 characters.
+- Sign-in sets an HttpOnly, SameSite=Lax session cookie signed with a key kept
+  in the data file (Secure over HTTPS). Sessions last `auth.session_hours`
+  (default 12), or 30 days with **Keep me signed in**. Changing a password,
+  an admin setting a new one, or **Sign out everywhere else** ends the
+  account's other sessions; deleting an account ends all of them.
+- Five wrong passwords for a username from one address block it for 15
+  minutes; 20 from one address block that address. Blocks are logged under
+  **Admin, Activity**.
+- Form posts from other sites are refused (`Origin` and `Sec-Fetch-Site`
+  checks), and pages can't be framed.
+- Behind a reverse proxy on the same host (nginx, Caddy, cloudflared) the
+  client address comes from `X-Forwarded-For`; set `public_url` so the
+  sign-in cookie is marked Secure and origin checks match.
+
+**Options** in `auth`:
+
+- `anonymous_access`: `"none"` (default) or `"viewer"` to let people who
+  haven't signed in view the pages; changes still need a sign-in. The demo uses
+  `"viewer"`.
+- `session_hours`: how long a sign-in lasts without "keep me signed in".
+- `users`: optional break-glass accounts defined in the config file. They
+  can't be edited from the web, so they still work if the data file's accounts
+  are lost. Put a hash in `password`, not the password itself:
+
+  ```sh
+  pmtracker hash-password        # type the password; prints pbkdf2-sha256$600000$…
+  ```
+
+  Plain-text passwords still work but are logged and flagged on the Users page.
+
+Scripts can use HTTP basic auth with any account, for example
+`curl -u reports:… https://pm.example.com/export.csv`. The calendar feed
+(`/forecast.ics?token=…`) uses its own token.
+
+**Locked out?** Add a user to `auth.users` in the config with a hashed
+password and restart, sign in as them, and set a new password for your
+account under Admin, Users.
 
 ## Deploy
 
@@ -168,6 +230,7 @@ LXC, or with Litestream-style file sync; writes are atomic (temp file + rename).
 
 ```
 pmtracker [-config file | -demo] [serve|check|sync|digest]
+pmtracker hash-password            read a password, print its hash for auth.users
   -addr     listen address (overrides config)
   -data     data file (overrides config)
   -today    pretend today is YYYY-MM-DD
@@ -178,14 +241,17 @@ pmtracker [-config file | -demo] [serve|check|sync|digest]
 
 ```
 cmd/pmtracker      flags, wiring, first-run seeding, digest scheduler
-internal/config    JSON config: server, Google, defaults, users and roles
+internal/auth      password hashing, signed session cookies, failed sign-in limiter
+internal/config    JSON config: server, Google, defaults, auth options, roles
 internal/core      catalog (sites, systems, vendors, tasks, calendars), matcher,
                    forecaster, snapshot with site and vendor roll-ups, CSV import,
                    digest, ICS feed
 internal/gcal      service-account client, events.list paging, syncer with 410 recovery
 internal/store     JSON-file store: catalog, mirrored events, decisions, rules,
-                   marks, hand-recorded visits, change log, activity log
-internal/web       pages, admin handlers, role checks, templates, timeline SVG, CSS
+                   marks, hand-recorded visits, change log, activity log,
+                   accounts and the session key
+internal/web       pages, sign-in, setup, accounts, admin handlers, role checks,
+                   templates, timeline SVG, CSS
 internal/demo      21-site demo catalog and fake calendar
 internal/notify    Telegram sender, daily scheduler
 ```
@@ -194,13 +260,15 @@ internal/notify    Telegram sender, daily scheduler
 location, Thai names, paused tasks, archived sites), forecasting and month
 clamps, site and vendor roll-ups, CSV import, the store's clean-up when tasks
 or calendars are deleted, sync against a fake Google API, every page
-rendering, roles, and the admin lifecycle (create, rename, add/edit/delete
-task, archive, delete).
+rendering, roles, the admin lifecycle (create, rename, add/edit/delete
+task, archive, delete), and sign-in: sessions, tampered cookies, cross-site
+posts, open redirects, lockout, first-run setup, user management and the
+last-admin guard.
 
 ## Limits and next steps
 
 - Data files from the first single-site POC aren't migrated; start fresh.
-- Basic auth with plain-text passwords; Google sign-in or Cloudflare Access
-  headers would be the next step.
+- Sign-in is username and password; Google sign-in (OIDC) or two-factor
+  would be the next step for exposure to the internet.
 - No service report or photo uploads per visit yet.
 - Polling only; Google push notifications would need a public HTTPS webhook.

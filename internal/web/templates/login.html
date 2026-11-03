@@ -1,0 +1,26 @@
+{{define "content"}}{{$d := .Data}}
+<section class="auth-card">
+  <h1>Sign in</h1>
+  <p class="lede">Preventive maintenance across your sites.</p>
+  {{with $d.Error}}<p class="flash error" role="alert">{{.}}</p>{{end}}
+  <form method="post" action="/login">
+    <input type="hidden" name="next" value="{{$d.Next}}">
+    <label class="stack">Username <input name="username" value="{{$d.Username}}" autocomplete="username" autocapitalize="none" spellcheck="false" required{{if not $d.Username}} autofocus{{end}}></label>
+    <label class="stack">Password <input name="password" type="password" autocomplete="current-password" required{{if $d.Username}} autofocus{{end}}></label>
+    <label class="check-line"><input type="checkbox" name="keep"{{if $d.Keep}} checked{{end}}> Keep me signed in on this device for 30 days</label>
+    <button type="submit" class="wide">Sign in</button>
+  </form>
+  {{if $d.Demo}}
+  <div class="demo-accounts">
+    <p class="strong">Demo accounts, all with the password <code>demo</code></p>
+    <ul class="plain-list">
+      <li><b>admin</b>: everything, including the admin pages and users</li>
+      <li><b>editor</b>: review the inbox, confirm visits, add past visits</li>
+      <li><b>viewer</b>: look and export</li>
+    </ul>
+  </div>
+  {{else}}
+  <p class="sub">Forgot your password? An admin can set a new one under Admin, Users.</p>
+  {{end}}
+</section>
+{{end}}
