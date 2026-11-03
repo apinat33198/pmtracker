@@ -10,6 +10,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/netip"
+	"net/url"
 	"os"
 	"regexp"
 	"strings"
@@ -38,9 +40,14 @@ type Config struct {
 	Digest              Digest         `json:"digest"`
 	Auth                Auth           `json:"auth"`
 	SeedCalendars       []SeedCalendar `json:"calendars"`
+	// TrustedProxies are reverse proxies (addresses or CIDRs) whose
+	// X-Forwarded-For header is believed. Default: loopback only. Behind
+	// Docker or a proxy on another host, add its address, e.g. "172.16.0.0/12".
+	TrustedProxies []string `json:"trusted_proxies"`
 
 	loc      *time.Location
 	holidays map[string]bool
+	proxies  []netip.Prefix
 }
 
 type Google struct {
@@ -195,6 +202,28 @@ func (c *Config) finish() error {
 			errs = append(errs, "every calendar needs an id")
 		}
 	}
+	if c.PublicURL != "" {
+		u, err := url.Parse(c.PublicURL)
+		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+			errs = append(errs, fmt.Sprintf("public_url %q: want https://host[:port]", c.PublicURL))
+		}
+	}
+	if len(c.TrustedProxies) == 0 {
+		c.TrustedProxies = []string{"127.0.0.0/8", "::1/128"}
+	}
+	c.proxies = nil
+	for _, p := range c.TrustedProxies {
+		pfx, err := netip.ParsePrefix(strings.TrimSpace(p))
+		if err != nil {
+			a, err2 := netip.ParseAddr(strings.TrimSpace(p))
+			if err2 != nil {
+				errs = append(errs, fmt.Sprintf("trusted_proxies: %q is not an address or CIDR", p))
+				continue
+			}
+			pfx = netip.PrefixFrom(a.Unmap(), a.Unmap().BitLen())
+		}
+		c.proxies = append(c.proxies, pfx.Masked())
+	}
 	if len(errs) > 0 {
 		return errors.New("config: " + strings.Join(errs, "; "))
 	}
@@ -217,5 +246,31 @@ func RoleRank(role string) int {
 }
 
 func (c *Config) Location() *time.Location { return c.loc }
+
+// TrustedProxy reports whether a is one of the configured reverse proxies.
+func (c *Config) TrustedProxy(a netip.Addr) bool {
+	a = a.Unmap()
+	for _, p := range c.proxies {
+		if p.Contains(a) {
+			return true
+		}
+	}
+	return false
+}
+
+// HTTPS reports whether the tracker is served over HTTPS (public_url).
+func (c *Config) HTTPS() bool { return strings.HasPrefix(strings.ToLower(c.PublicURL), "https://") }
+
+// placeholderToken is the feed token in config.example.json.
+const placeholderToken = "replace-with-a-long-random-string"
+
+// SecretProblems lists settings that aren't safe to go live with.
+func (c *Config) SecretProblems() []string {
+	var out []string
+	if t := c.Feed.Token; t != "" && (t == placeholderToken || len(t) < 24) {
+		out = append(out, "feed.token is the example value or shorter than 24 characters: set a random one (openssl rand -hex 24) or leave it empty to turn the calendar feed off")
+	}
+	return out
+}
 
 func (c *Config) IsHoliday(d time.Time) bool { return c.holidays[d.Format("2006-01-02")] }

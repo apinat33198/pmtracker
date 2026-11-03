@@ -18,6 +18,15 @@ func TestApplySync(t *testing.T) {
 		t.Fatal(err)
 	}
 	now := day("2026-11-03")
+	if n, err := s.ApplySync("cal", true, []core.Event{{ID: "x", Status: "confirmed", Start: now}}, "tok0", now); err != nil || n != 0 || len(s.Inputs().Events) != 0 {
+		t.Fatal("a calendar that isn't tracked (removed mid-sync) must not be written")
+	}
+	if err := s.UpdateCatalog("t", "add", func(c *core.Catalog) error {
+		c.Calendars = []core.Calendar{{ID: "cal", Label: "PM"}}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
 	full := []core.Event{
 		{ID: "a", Status: "confirmed", Summary: "[PM] BKK1 UPS", Start: day("2026-11-20"), AllDay: true},
 		{ID: "b", Status: "confirmed", Summary: "[PM] BKK1 DC", Start: day("2026-12-01"), AllDay: true},
@@ -44,8 +53,9 @@ func TestApplySync(t *testing.T) {
 	if e, _ := s2.Event("cal|b"); e.Status != "cancelled" || e.Summary != "[PM] BKK1 DC" {
 		t.Errorf("cancelled event keeps its fields: %+v", e)
 	}
-	if err := s2.ResetCalendar("cal"); err != nil || s2.CalendarState("cal").SyncToken != "" || len(s2.Inputs().Events) != 0 {
-		t.Error("reset should clear token and events")
+	// A later full sync replaces the mirror: events it doesn't list are dropped.
+	if n, err := s2.ApplySync("cal", true, []core.Event{full[0]}, "tok3", now); err != nil || n == 0 || len(s2.Inputs().Events) != 1 {
+		t.Errorf("full resync = %d, %v, %d events", n, err, len(s2.Inputs().Events))
 	}
 }
 

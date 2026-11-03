@@ -31,7 +31,7 @@
 {{with $d.Error}}<p class="flash error" role="alert">{{.}}</p>{{end}}
 {{with $d.Result}}
 <h2>{{if $d.Applied}}Imported{{else}}Check result{{end}}</h2>
-<p class="{{if $d.Applied}}flash{{else}}note{{end}}">{{if not $d.Applied}}Nothing was saved yet. {{end}}{{.SitesCreated}} new {{plural .SitesCreated "site" "sites"}}, {{.VendorsCreated}} new {{plural .VendorsCreated "vendor" "vendors"}}, {{.SystemsCreated}} new {{plural .SystemsCreated "system" "systems"}}, {{.TasksCreated}} new {{plural .TasksCreated "task" "tasks"}}, {{.TasksUpdated}} updated, {{.VisitsAdded}} last PM {{plural .VisitsAdded "date" "dates"}}.{{if .Errors}} {{.Errors}} {{plural .Errors "row was" "rows were"}} skipped.{{end}}</p>
+<p class="{{if $d.Applied}}flash{{else}}note{{end}}">{{if not $d.Applied}}Nothing was saved yet. {{end}}{{.SitesCreated}} new {{plural .SitesCreated "site" "sites"}}, {{.VendorsCreated}} new {{plural .VendorsCreated "vendor" "vendors"}}, {{.SystemsCreated}} new {{plural .SystemsCreated "system" "systems"}}, {{.TasksCreated}} new {{plural .TasksCreated "task" "tasks"}}, {{.TasksUpdated}} updated, {{.VisitsAdded}} last PM {{plural .VisitsAdded "date" "dates"}}.{{if .Errors}} {{.Errors}} {{plural .Errors "row has" "rows have"}} problems, shown below; fix {{plural .Errors "it" "them"}} before importing.{{end}}</p>
 <table class="plain compact">
   <thead><tr><th scope="col">Line</th><th scope="col">Result</th></tr></thead>
   <tbody>{{range .Lines}}<tr><td data-label="Line">{{.Line}}</td><td data-label="Result">{{if .OK}}{{.Message}}{{else}}<span class="late">Skipped: {{.Message}}</span>{{end}}</td></tr>{{end}}</tbody>

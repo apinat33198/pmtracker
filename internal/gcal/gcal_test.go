@@ -10,6 +10,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"io"
 	"log"
 	"net/http"
@@ -189,5 +190,37 @@ func TestGoogleNotShared(t *testing.T) {
 	_, _, err := g.List(context.Background(), "x", "", time.Time{})
 	if err == nil || !strings.Contains(err.Error(), "pm-reader@proj.iam.gserviceaccount.com") {
 		t.Errorf("want a hint to share the calendar with the service account, got %v", err)
+	}
+}
+
+// goneThenDown answers the first full listing, then says the sync token is
+// gone and fails the re-read.
+type goneThenDown struct{ calls int }
+
+func (f *goneThenDown) List(_ context.Context, _, tok string, _ time.Time) ([]core.Event, string, error) {
+	f.calls++
+	if tok != "" {
+		return nil, "", ErrSyncTokenGone
+	}
+	if f.calls == 1 {
+		return []core.Event{{ID: "a", Status: "confirmed", Summary: "[PM] BKK1 UPS", Start: time.Now()}}, "t1", nil
+	}
+	return nil, "", errors.New("network down")
+}
+
+func TestFailedResyncKeepsTheMirror(t *testing.T) {
+	cfg, _ := config.Parse([]byte(`{}`))
+	st, _ := store.Open(filepath.Join(t.TempDir(), "d.json"))
+	st.UpdateCatalog("test", "Add calendar", func(c *core.Catalog) error {
+		c.Calendars = []core.Calendar{{ID: "pm", Label: "PM"}}
+		return nil
+	})
+	sy := &Syncer{Store: st, Source: &goneThenDown{}, Cfg: cfg, Now: time.Now, Log: log.New(io.Discard, "", 0)}
+	sy.SyncAll(context.Background())
+	if r := sy.SyncAll(context.Background())[0]; r.Err == nil {
+		t.Fatal("the re-read should fail")
+	}
+	if n := len(st.Inputs().Events); n != 1 {
+		t.Errorf("a failed re-read after 410 emptied the mirror: %d events", n)
 	}
 }

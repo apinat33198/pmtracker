@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 )
@@ -42,5 +43,13 @@ func TestNextRun(t *testing.T) {
 	}
 	if _, err := NextRun(now, "8am", loc); err == nil {
 		t.Error("want an error for a bad time")
+	}
+}
+
+func TestErrorsHideTheBotToken(t *testing.T) {
+	tg := Telegram{APIBase: "http://127.0.0.1:1", BotToken: "123456:SECRET", ChatID: "1"}
+	err := tg.Send(context.Background(), "hi")
+	if err == nil || strings.Contains(err.Error(), "SECRET") {
+		t.Errorf("error leaks the token: %v", err)
 	}
 }

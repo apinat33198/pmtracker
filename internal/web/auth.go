@@ -2,10 +2,14 @@ package web
 
 import (
 	"context"
+	"crypto/sha256"
 	"crypto/subtle"
+	"encoding/binary"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"strings"
 	"time"
@@ -59,7 +63,7 @@ func (s *Server) accounts() []account {
 	var out []account
 	seen := map[string]bool{}
 	for _, u := range s.Cfg.Auth.Users {
-		out = append(out, account{Username: u.Username, Role: u.Role, Hash: u.Password, Config: true})
+		out = append(out, account{Username: u.Username, Role: u.Role, Hash: u.Password, Config: true, Epoch: fingerprint(u.Password)})
 		seen[u.Username] = true
 	}
 	for _, u := range s.Store.Users() {
@@ -69,6 +73,13 @@ func (s *Server) accounts() []account {
 		}
 	}
 	return out
+}
+
+// fingerprint ties sessions of config-file accounts to their password:
+// changing the password in the config ends the old sessions.
+func fingerprint(secret string) int {
+	sum := sha256.Sum256([]byte("pmtracker-config-account|" + secret))
+	return int(binary.BigEndian.Uint32(sum[:4]) & 0x7fffffff)
 }
 
 func (s *Server) account(name string) (account, bool) {
@@ -141,9 +152,21 @@ func (s *Server) authenticate(next http.Handler) http.Handler {
 		h := w.Header()
 		h.Set("X-Content-Type-Options", "nosniff")
 		h.Set("X-Frame-Options", "DENY")
-		h.Set("Content-Security-Policy", "frame-ancestors 'none'")
+		h.Set("Content-Security-Policy", "frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'")
 		h.Set("Referrer-Policy", "same-origin")
+		if s.Cfg.HTTPS() {
+			h.Set("Strict-Transport-Security", "max-age=31536000")
+		}
 		path := r.URL.Path
+		// Nothing here takes large uploads except the CSV import.
+		limit := int64(1 << 20)
+		switch path {
+		case "/admin/import":
+			limit = 6 << 20
+		case "/login", "/setup":
+			limit = 64 << 10
+		}
+		r.Body = http.MaxBytesReader(w, r.Body, limit)
 		if path == "/healthz" || path == "/forecast.ics" || strings.HasPrefix(path, "/static/") {
 			next.ServeHTTP(w, r) // the calendar feed checks its own token
 			return
@@ -167,6 +190,21 @@ func (s *Server) authenticate(next http.Handler) http.Handler {
 			h.Set("WWW-Authenticate", `Basic realm="PM Tracker", charset="UTF-8"`)
 			http.Error(w, msg, http.StatusUnauthorized)
 			return
+		}
+		// Read forms up front so an oversized one is refused rather than
+		// handled as empty. Posts from visitors who haven't signed in are only
+		// read on the sign-in and setup pages.
+		if r.Method == http.MethodPost && (u.SignedIn || path == "/login" || path == "/setup") &&
+			strings.HasPrefix(r.Header.Get("Content-Type"), "application/x-www-form-urlencoded") {
+			if err := r.ParseForm(); err != nil {
+				code := http.StatusBadRequest
+				var tooBig *http.MaxBytesError
+				if errors.As(err, &tooBig) {
+					code = http.StatusRequestEntityTooLarge
+				}
+				http.Error(w, "The form could not be read: "+err.Error(), code)
+				return
+			}
 		}
 		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), ctxKey{}, u)))
 	})
@@ -196,7 +234,7 @@ func (s *Server) sameOrigin(r *http.Request) bool {
 // identify returns the user, or a message when basic-auth credentials are wrong.
 func (s *Server) identify(r *http.Request) (user, string) {
 	if name, pass, ok := r.BasicAuth(); ok {
-		addr := clientAddr(r)
+		addr := s.clientAddr(r)
 		if wait := s.limiter.Blocked(name, addr, s.Now()); wait > 0 {
 			return user{}, "Too many failed sign-ins. Try again in " + minutes(wait) + "."
 		}
@@ -240,41 +278,89 @@ func (s *Server) need(role string, h http.HandlerFunc) http.Handler {
 	})
 }
 
+// toLogin sends a visitor who hasn't signed in to the sign-in page. For a
+// form post it returns them to the page they posted from; the body of a
+// post from someone not signed in is never read.
 func (s *Server) toLogin(w http.ResponseWriter, r *http.Request) {
 	next := r.URL.RequestURI()
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
-		next = safeNext(r.FormValue("back"))
+		next = "/"
+		if ref, err := url.Parse(r.Referer()); err == nil && ref.Host == r.Host {
+			next = ref.RequestURI()
+		}
 	}
-	http.Redirect(w, r, "/login?next="+url.QueryEscape(next), http.StatusSeeOther)
+	http.Redirect(w, r, "/login?next="+url.QueryEscape(safeNext(next)), http.StatusSeeOther)
 }
 
-// safeNext keeps redirects on this site.
+// localPath returns target when it's a path on this site. Anything that
+// could lead a browser elsewhere is refused: other schemes and hosts,
+// "//host", backslashes, and control characters (browsers drop tabs and
+// newlines, so "/\t/evil.example" would become "//evil.example").
+func localPath(target string) (string, bool) {
+	if !strings.HasPrefix(target, "/") || strings.HasPrefix(target, "//") || strings.ContainsRune(target, '\\') {
+		return "", false
+	}
+	for _, c := range target {
+		if c < 0x20 || c == 0x7f {
+			return "", false
+		}
+	}
+	u, err := url.Parse(target)
+	if err != nil || u.Scheme != "" || u.Host != "" || u.Opaque != "" || u.User != nil {
+		return "", false
+	}
+	return target, true
+}
+
+// safeNext is where to go after signing in.
 func safeNext(next string) string {
-	if next == "" || !strings.HasPrefix(next, "/") || strings.HasPrefix(next, "//") || strings.HasPrefix(next, `/\`) ||
-		strings.ContainsAny(next, "\r\n") || strings.HasPrefix(next, "/login") || strings.HasPrefix(next, "/setup") {
+	p, ok := localPath(next)
+	if !ok || p == "/login" || strings.HasPrefix(p, "/login?") || strings.HasPrefix(p, "/setup") || strings.HasPrefix(p, "/logout") {
 		return "/"
 	}
-	return next
+	return p
 }
 
-// clientAddr is the caller's IP. Behind a reverse proxy on the same host
-// (nginx, cloudflared, Caddy) it's the address the proxy reports.
-func clientAddr(r *http.Request) string {
+// clientAddr is the caller's address for rate limiting. Requests from a
+// trusted proxy are attributed to the first untrusted address in
+// X-Forwarded-For, read from the right. IPv6 clients are grouped by /64,
+// since one host usually controls a whole /64.
+func (s *Server) clientAddr(r *http.Request) string {
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
 		host = r.RemoteAddr
 	}
-	if ip := net.ParseIP(host); ip != nil && ip.IsLoopback() {
-		if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-			parts := strings.Split(xff, ",")
-			return strings.TrimSpace(parts[len(parts)-1])
+	addr, err := netip.ParseAddr(host)
+	if err != nil {
+		return host
+	}
+	addr = addr.Unmap()
+	if s.Cfg.TrustedProxy(addr) {
+		var hops []string
+		for _, v := range r.Header.Values("X-Forwarded-For") {
+			hops = append(hops, strings.Split(v, ",")...)
+		}
+		for i := len(hops) - 1; i >= 0; i-- {
+			a, err := netip.ParseAddr(strings.TrimSpace(hops[i]))
+			if err != nil {
+				break
+			}
+			addr = a.Unmap()
+			if !s.Cfg.TrustedProxy(addr) {
+				break
+			}
 		}
 	}
-	return host
+	if addr.Is6() {
+		if p, err := addr.Prefix(64); err == nil {
+			return p.String()
+		}
+	}
+	return addr.String()
 }
 
-func isHTTPS(r *http.Request) bool {
-	return r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https"
+func (s *Server) isHTTPS(r *http.Request) bool {
+	return r.TLS != nil || s.Cfg.HTTPS() || r.Header.Get("X-Forwarded-Proto") == "https"
 }
 
 func minutes(d time.Duration) string {
@@ -302,12 +388,15 @@ func (s *Server) failed(name, addr string) bool {
 	if !s.limiter.Fail(name, addr, s.Now()) {
 		return false
 	}
-	if len(name) > 40 {
-		name = name[:40] + "…"
+	_, known := s.account(name)
+	if r := []rune(name); len(r) > 40 {
+		name = string(r[:40]) + "…"
 	}
 	msg := fmt.Sprintf("Blocked sign-ins as %q from %s for %s after repeated wrong passwords", name, addr, minutes(s.limiter.Lockout))
 	s.Log.Print("auth: " + msg)
-	s.Store.Log("security", msg)
+	if known { // guesses at made-up usernames go to the server log only, so they can't flood Activity
+		s.Store.Log("security", msg)
+	}
 	return true
 }
 
@@ -317,7 +406,7 @@ func (s *Server) startSession(w http.ResponseWriter, r *http.Request, a account,
 		Value:    auth.Sign(s.secret, auth.Session{Username: a.Username, Epoch: a.Epoch, Expires: expires}),
 		Path:     "/",
 		HttpOnly: true,
-		Secure:   isHTTPS(r),
+		Secure:   s.isHTTPS(r),
 		SameSite: http.SameSiteLaxMode,
 	}
 	if persistent {
@@ -353,9 +442,9 @@ func (s *Server) reissue(w http.ResponseWriter, r *http.Request, name string) {
 	s.startSession(w, r, a, sess.Expires, persistent)
 }
 
-func clearSession(w http.ResponseWriter, r *http.Request) {
+func (s *Server) clearSession(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, &http.Cookie{Name: sessionCookie, Value: "", Path: "/", MaxAge: -1, HttpOnly: true,
-		Secure: isHTTPS(r), SameSite: http.SameSiteLaxMode})
+		Secure: s.isHTTPS(r), SameSite: http.SameSiteLaxMode})
 }
 
 // --- sign in, sign out, first-run setup ---
@@ -377,7 +466,7 @@ func (s *Server) loginPage(w http.ResponseWriter, r *http.Request) {
 func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	name := strings.ToLower(strings.TrimSpace(r.FormValue("username")))
 	d := loginData{Next: safeNext(r.FormValue("next")), Username: name, Keep: r.FormValue("keep") != "", Demo: s.Demo}
-	addr := clientAddr(r)
+	addr := s.clientAddr(r)
 	if wait := s.limiter.Blocked(name, addr, s.Now()); wait > 0 {
 		d.Error = "Too many failed sign-ins. Try again in " + minutes(wait) + "."
 		s.renderCode(w, r, http.StatusTooManyRequests, "login", "", "Sign in", core.Snapshot{}, d)
@@ -401,7 +490,7 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
-	clearSession(w, r)
+	s.clearSession(w, r)
 	s.redirect(w, r, "/login", "You're signed out.", "")
 }
 
@@ -500,7 +589,7 @@ func (s *Server) changeOwnPassword(w http.ResponseWriter, r *http.Request) {
 		s.redirect(w, r, "/account", "This account is defined in the config file. Change its password there.", "error")
 		return
 	}
-	addr := clientAddr(r)
+	addr := s.clientAddr(r)
 	if wait := s.limiter.Blocked(u.Name, addr, s.Now()); wait > 0 {
 		s.redirect(w, r, "/account", "Too many wrong passwords. Try again in "+minutes(wait)+".", "error")
 		return

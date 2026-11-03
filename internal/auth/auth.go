@@ -207,10 +207,38 @@ func (l *Limiter) Blocked(username, addr string, now time.Time) time.Duration {
 	return wait
 }
 
+// maxEntries bounds the limiter's memory; older entries are pruned first.
+const maxEntries = 10000
+
+// prune drops failures outside the window and expired lockouts.
+func (l *Limiter) prune(now time.Time) {
+	for k, ts := range l.failures {
+		if len(ts) == 0 || now.Sub(ts[len(ts)-1]) >= l.Window {
+			delete(l.failures, k)
+		}
+	}
+	for k, until := range l.locked {
+		if !now.Before(until) {
+			delete(l.locked, k)
+		}
+	}
+	// Still too many (a flood from many addresses): forget failures down to
+	// half the cap, so pruning runs rarely. Lockouts are kept.
+	for k := range l.failures {
+		if len(l.failures)+len(l.locked) <= maxEntries/2 {
+			break
+		}
+		delete(l.failures, k)
+	}
+}
+
 // Fail records a failed sign-in and reports whether it caused a lockout.
 func (l *Limiter) Fail(username, addr string, now time.Time) bool {
 	l.mu.Lock()
 	defer l.mu.Unlock()
+	if len(l.failures)+len(l.locked) > maxEntries {
+		l.prune(now)
+	}
 	locked := false
 	for _, kv := range []struct {
 		key string

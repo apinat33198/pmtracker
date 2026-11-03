@@ -4,8 +4,11 @@ package web
 import (
 	"bytes"
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
 	"crypto/subtle"
 	"embed"
+	"encoding/base64"
 	"encoding/csv"
 	"fmt"
 	"html/template"
@@ -231,11 +234,14 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, name, nav, title
 func (s *Server) renderCode(w http.ResponseWriter, r *http.Request, code int, name, nav, title string, snap core.Snapshot, data any) {
 	u := userOf(r)
 	p := page{Title: title, Nav: nav, Demo: s.Demo, Snap: snap, Cat: snap.Catalog, Cfg: s.Cfg, Data: data, User: u,
-		IsEditor: u.can(config.RoleEditor), IsAdmin: u.can(config.RoleAdmin), Bare: snap.Catalog == nil,
-		Msg: r.URL.Query().Get("msg"), MsgKind: r.URL.Query().Get("kind")}
+		IsEditor: u.can(config.RoleEditor), IsAdmin: u.can(config.RoleAdmin), Bare: snap.Catalog == nil}
 	q := r.URL.Query()
+	if msg, kind := q.Get("msg"), q.Get("kind"); msg != "" && hmac.Equal([]byte(q.Get("sig")), []byte(s.flashSig(msg, kind))) {
+		p.Msg, p.MsgKind = msg, kind
+	}
 	q.Del("msg")
 	q.Del("kind")
+	q.Del("sig")
 	p.Back = r.URL.Path
 	if enc := q.Encode(); enc != "" {
 		p.Back += "?" + enc
@@ -457,8 +463,8 @@ func (s *Server) exportCSV(w http.ResponseWriter, r *http.Request) {
 	cw.Write([]string{"site_code", "site_name", "region", "system", "vendor", "status", "last_pm_date", "next_due", "days_left", "booked_date", "interval_months", "anchor_mode", "anchor_date"})
 	for _, ss := range snap.Sites {
 		for _, f := range ss.Forecasts {
-			row := []string{ss.Site.Code, ss.Site.Name, ss.Site.Region, snap.Catalog.SystemName(f.Task.System),
-				snap.Catalog.VendorName(f.Task.Vendor), f.Status.Label(), "", "", "", "",
+			row := []string{csvCell(ss.Site.Code), csvCell(ss.Site.Name), csvCell(ss.Site.Region), csvCell(snap.Catalog.SystemName(f.Task.System)),
+				csvCell(snap.Catalog.VendorName(f.Task.Vendor)), f.Status.Label(), "", "", "", "",
 				strconv.Itoa(f.Policy.IntervalMonths), f.Policy.AnchorMode, f.Task.AnchorDate}
 			if f.LastDone != nil {
 				row[6] = f.LastDone.Date.Format("2006-01-02")
@@ -477,7 +483,7 @@ func (s *Server) exportCSV(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) digestText(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	d := core.Digest(s.snapshot(), baseURL(r))
+	d := core.Digest(s.snapshot(), s.baseURL(r))
 	if d == "" {
 		d = "Nothing needs attention today."
 	}
@@ -595,7 +601,11 @@ func (s *Server) mark(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	u := userOf(r)
-	label := s.visitLabel(r.FormValue("visit"))
+	label, ok := s.visit(r.FormValue("visit"))
+	if !ok {
+		s.back(w, r, "/", "That visit is no longer on record.", "error")
+		return
+	}
 	action := "Confirmed " + label + " as done"
 	msg := "Visit confirmed as done."
 	if st == "missed" {
@@ -609,6 +619,12 @@ func (s *Server) mark(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) visitLabel(id string) string {
+	label, _ := s.visit(id)
+	return label
+}
+
+// visit describes a visit on record, and reports whether there is one.
+func (s *Server) visit(id string) (string, bool) {
 	snap := s.snapshot()
 	for _, v := range snap.Visits {
 		if v.ID == id {
@@ -616,10 +632,10 @@ func (s *Server) visitLabel(id string) string {
 			for _, t := range v.Tasks {
 				names = append(names, snap.Catalog.TaskLabel(t))
 			}
-			return fmt.Sprintf("the %s visit on %s", strings.Join(names, ", "), v.Date.Format("2 Jan 2006"))
+			return fmt.Sprintf("the %s visit on %s", strings.Join(names, ", "), v.Date.Format("2 Jan 2006")), true
 		}
 	}
-	return "a visit"
+	return "a visit", false
 }
 
 func (s *Server) unmark(w http.ResponseWriter, r *http.Request) {
@@ -686,34 +702,60 @@ func (s *Server) fail(w http.ResponseWriter, err error) {
 
 // back redirects to the form's "back" path (same-site only) or a fallback.
 func (s *Server) back(w http.ResponseWriter, r *http.Request, fallback, msg, kind string) {
-	target := r.FormValue("back")
-	if !strings.HasPrefix(target, "/") || strings.HasPrefix(target, "//") || strings.HasPrefix(target, "/\\") {
+	target, ok := localPath(r.FormValue("back"))
+	if !ok {
 		target = fallback
 	}
 	s.redirect(w, r, target, msg, kind)
 }
 
+// redirect goes to a path on this site with a flash message. The message is
+// signed so a crafted link can't put words on the page.
 func (s *Server) redirect(w http.ResponseWriter, r *http.Request, target, msg, kind string) {
-	u, _ := url.Parse(target)
+	u, err := url.Parse(target)
+	if err != nil {
+		u = &url.URL{Path: "/"}
+	}
 	q := u.Query()
 	q.Del("msg")
 	q.Del("kind")
+	q.Del("sig")
 	if msg != "" {
 		q.Set("msg", msg)
-	}
-	if kind != "" {
-		q.Set("kind", kind)
+		if kind != "" {
+			q.Set("kind", kind)
+		}
+		q.Set("sig", s.flashSig(msg, kind))
 	}
 	u.RawQuery = q.Encode()
 	http.Redirect(w, r, u.String(), http.StatusSeeOther)
 }
 
-func baseURL(r *http.Request) string {
+func (s *Server) flashSig(msg, kind string) string {
+	m := hmac.New(sha256.New, s.secret)
+	m.Write([]byte("flash|" + kind + "|" + msg))
+	return base64.RawURLEncoding.EncodeToString(m.Sum(nil)[:16])
+}
+
+// baseURL is the tracker's address for links: public_url when set,
+// otherwise the request's host.
+func (s *Server) baseURL(r *http.Request) string {
+	if s.Cfg.PublicURL != "" {
+		return strings.TrimRight(s.Cfg.PublicURL, "/")
+	}
 	scheme := "http"
-	if r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https" {
+	if s.isHTTPS(r) {
 		scheme = "https"
 	}
 	return scheme + "://" + r.Host
+}
+
+// csvCell stops spreadsheet apps from running a cell as a formula.
+func csvCell(v string) string {
+	if v != "" && strings.ContainsRune("=+-@\t\r", rune(v[0])) {
+		return "'" + v
+	}
+	return v
 }
 
 func plural(n int, one, many string) string {

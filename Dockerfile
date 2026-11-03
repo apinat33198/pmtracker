@@ -1,4 +1,5 @@
-FROM golang:1.24-alpine AS build
+# Build with a supported Go release: Go 1.24 and 1.25 no longer get security fixes.
+FROM golang:1.27-alpine AS build
 WORKDIR /src
 COPY . .
 RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/pmtracker ./cmd/pmtracker

@@ -1,6 +1,7 @@
 package config
 
 import (
+	"net/netip"
 	"strings"
 	"testing"
 )
@@ -44,5 +45,28 @@ func TestValidation(t *testing.T) {
 	}
 	if RoleRank(RoleAdmin) <= RoleRank(RoleEditor) || RoleRank(RoleEditor) <= RoleRank(RoleViewer) {
 		t.Error("role order")
+	}
+}
+
+func TestProxiesAndSecrets(t *testing.T) {
+	c, err := Parse([]byte(`{"trusted_proxies": ["172.16.0.0/12", "10.0.0.5"], "public_url": "https://pm.example.com", "feed": {"token": "replace-with-a-long-random-string"}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for addr, want := range map[string]bool{"172.18.0.2": true, "10.0.0.5": true, "10.0.0.6": false, "127.0.0.1": false, "203.0.113.9": false} {
+		if got := c.TrustedProxy(netip.MustParseAddr(addr)); got != want {
+			t.Errorf("TrustedProxy(%s) = %v", addr, got)
+		}
+	}
+	if !c.HTTPS() || len(c.SecretProblems()) != 1 {
+		t.Errorf("https=%v problems=%v", c.HTTPS(), c.SecretProblems())
+	}
+	d, _ := Parse([]byte(`{}`))
+	if !d.TrustedProxy(netip.MustParseAddr("127.0.0.1")) || !d.TrustedProxy(netip.MustParseAddr("::1")) || d.TrustedProxy(netip.MustParseAddr("192.168.1.10")) {
+		t.Error("default trusted proxies are loopback only")
+	}
+	if _, err := Parse([]byte(`{"trusted_proxies": ["nope"], "public_url": "pm.example.com"}`)); err == nil ||
+		!strings.Contains(err.Error(), "trusted_proxies") || !strings.Contains(err.Error(), "public_url") {
+		t.Errorf("want proxy and url errors, got %v", err)
 	}
 }

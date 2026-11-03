@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -102,5 +103,16 @@ func TestLimiter(t *testing.T) {
 	}
 	if l3.Blocked("someone-new", "evil", now) == 0 {
 		t.Error("address-wide lockout after 20 failures")
+	}
+}
+
+func TestLimiterStaysBounded(t *testing.T) {
+	l := NewLimiter()
+	now := time.Date(2026, 11, 3, 12, 0, 0, 0, time.UTC)
+	for i := 0; i < 3*maxEntries; i++ {
+		l.Fail("u", fmt.Sprintf("10.%d.%d.%d", i>>16&255, i>>8&255, i&255), now.Add(time.Duration(i)*time.Millisecond))
+	}
+	if n := len(l.failures) + len(l.locked); n > maxEntries+2 {
+		t.Errorf("limiter holds %d entries", n)
 	}
 }

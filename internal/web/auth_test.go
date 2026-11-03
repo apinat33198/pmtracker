@@ -4,6 +4,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/cookiejar"
+	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
@@ -225,7 +226,7 @@ func TestAnonymousViewers(t *testing.T) {
 	if code, _, _ := b.do("GET", "/admin/sites", nil); code != http.StatusSeeOther {
 		t.Errorf("anonymous admin = %d", code)
 	}
-	if code, _, loc := b.do("POST", "/inbox/ignore", url.Values{"event": {"x"}, "back": {"/inbox"}}); code != http.StatusSeeOther || loc != "/login?next=%2Finbox" {
+	if code, _, loc := b.do("POST", "/inbox/ignore", url.Values{"event": {"x"}}, "Referer", e.srv.URL+"/inbox"); code != http.StatusSeeOther || loc != "/login?next=%2Finbox" {
 		t.Errorf("anonymous post = %d %q", code, loc)
 	}
 	if code, _, _ := b.do("GET", "/account", nil); code != http.StatusSeeOther {
@@ -366,4 +367,170 @@ func TestKeepSignedIn(t *testing.T) {
 	if c == nil || !c.HttpOnly || c.SameSite != http.SameSiteLaxMode || c.MaxAge < int((29*24*time.Hour).Seconds()) {
 		t.Errorf("persistent cookie = %+v", c)
 	}
+}
+
+func TestRedirectsStayOnSite(t *testing.T) {
+	e := demoServer(t, nil)
+	addUser(t, e, "nok", config.RoleEditor, "viewer password 1")
+	bad := []string{"/\t/evil.example", "/\n/evil.example", "/\r\n/evil.example", "/\\evil.example", "/x\\..\\\\evil",
+		"//evil.example", "https://evil.example", "javascript:alert(1)", "/\x7f", " /x", "/login", "/logout"}
+	for _, next := range bad {
+		b := newBrowser(t, e)
+		_, _, loc := b.do("POST", "/login", url.Values{"username": {"nok"}, "password": {"viewer password 1"}, "next": {next}})
+		if loc != "/" {
+			t.Errorf("sign in with next=%q went to %q", next, loc)
+		}
+		if code, body, _ := b.do("GET", "/login?next="+url.QueryEscape(next), nil); code != http.StatusSeeOther && strings.Contains(body, "evil") {
+			t.Errorf("sign-in form kept next=%q", next)
+		}
+		// Form "back" fields: no panic, no off-site redirect.
+		code, _, loc := b.do("POST", "/visits/unmark", url.Values{"visit": {"x"}, "back": {next}})
+		lu, err := url.Parse(loc)
+		if code != http.StatusSeeOther || err != nil || lu.Host != "" || strings.HasPrefix(loc, "//") || strings.ContainsAny(loc, "\\\t\r\n") {
+			t.Errorf("back=%q -> %d %q", next, code, loc)
+		}
+	}
+	b := newBrowser(t, e)
+	if _, _, loc := b.do("POST", "/login", url.Values{"username": {"nok"}, "password": {"viewer password 1"}, "next": {"/sites/bkk1?x=1"}}); loc != "/sites/bkk1?x=1" {
+		t.Errorf("a normal next should be kept, got %q", loc)
+	}
+}
+
+func TestBodyLimits(t *testing.T) {
+	e := demoServer(t, nil)
+	big := strings.Repeat("A", 2<<20)
+	// Not signed in: the body of a post to a protected page is never read.
+	r, _ := http.NewRequest("POST", e.srv.URL+"/admin/import", strings.NewReader("csv="+strings.Repeat("A", 20<<20)))
+	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	resp, err := noFollow.Do(r)
+	if err == nil {
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusSeeOther {
+			t.Errorf("anonymous big post = %d", resp.StatusCode)
+		}
+	}
+	if code, _, _ := newBrowser(t, e).do("POST", "/login", url.Values{"username": {"x"}, "password": {big}}); code != http.StatusRequestEntityTooLarge {
+		t.Errorf("a 2 MB sign-in form should be refused, got %d", code)
+	}
+	// Signed in, ordinary forms are capped at 1 MB; the import takes up to 6 MB.
+	if code, _, _ := req(t, "POST", e.srv.URL+"/admin/systems", "admin", url.Values{"name": {big}}); code != http.StatusRequestEntityTooLarge {
+		t.Errorf("2 MB admin form = %d", code)
+	}
+	csv := "site_code,system,vendor\n" + strings.Repeat("ZZZ1,UPS,ABC Power\n", 150000)
+	if code, body, _ := req(t, "POST", e.srv.URL+"/admin/import", "admin", url.Values{"csv": {csv}, "mode": {"check"}}); code != 200 || !strings.Contains(body, "Nothing was saved yet") {
+		t.Errorf("a 3 MB import should be accepted: %d", code)
+	}
+}
+
+func TestFlashMessagesAreSigned(t *testing.T) {
+	e := demoServer(t, nil)
+	if body := get(t, e, "/?msg=Your+account+is+locked.+Call+081-000-0000&kind=error"); strings.Contains(body, "081-000-0000") {
+		t.Error("an unsigned message from the URL was shown")
+	}
+	code, _, _ := req(t, "POST", e.srv.URL+"/admin/systems", "admin", url.Values{"name": {"Battery"}})
+	if code != http.StatusSeeOther {
+		t.Fatal(code)
+	}
+	r, _ := http.NewRequest("POST", e.srv.URL+"/admin/systems", strings.NewReader("name=Battery+bank"))
+	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	r.SetBasicAuth("admin", "pw")
+	resp, _ := noFollow.Do(r)
+	resp.Body.Close()
+	if body := get(t, e, resp.Header.Get("Location")); !strings.Contains(body, "Added system Battery bank.") {
+		t.Error("our own messages should still show")
+	}
+}
+
+func TestClientAddressBehindProxies(t *testing.T) {
+	cfg, _ := config.Parse([]byte(`{"trusted_proxies": ["172.16.0.0/12"]}`))
+	s := &Server{Cfg: cfg}
+	cases := []struct{ remote, xff, want string }{
+		{"203.0.113.7:5000", "198.51.100.1", "203.0.113.7"},             // not a proxy: header ignored
+		{"172.18.0.2:5000", "198.51.100.1", "198.51.100.1"},             // Docker proxy
+		{"172.18.0.2:5000", "6.6.6.6, 198.51.100.1", "198.51.100.1"},    // spoofed left entry ignored
+		{"172.18.0.2:5000", "198.51.100.1, 172.18.0.3", "198.51.100.1"}, // chain of proxies
+		{"127.0.0.1:5000", "198.51.100.1", "127.0.0.1"},                 // loopback isn't trusted here
+		{"[2001:db8:1:2:3:4:5:6]:5000", "", "2001:db8:1:2::/64"},        // IPv6 grouped by /64
+	}
+	for _, c := range cases {
+		r := httptest.NewRequest("GET", "/", nil)
+		r.RemoteAddr = c.remote
+		if c.xff != "" {
+			r.Header.Set("X-Forwarded-For", c.xff)
+		}
+		if got := s.clientAddr(r); got != c.want {
+			t.Errorf("%s via %q = %s, want %s", c.remote, c.xff, got, c.want)
+		}
+	}
+}
+
+func TestConfigAccountSessionsEndWithPasswordChange(t *testing.T) {
+	e := demoServer(t, []config.User{{Username: "breakglass", Password: "old password 1", Role: config.RoleAdmin}})
+	b := newBrowser(t, e)
+	if code, _ := b.login("breakglass", "old password 1"); code != http.StatusSeeOther {
+		t.Fatal("sign in")
+	}
+	e.server.Cfg.Auth.Users[0].Password = "new password 2" // edited in the config, then restarted
+	if code, _, _ := b.do("GET", "/admin/sites", nil); code != http.StatusSeeOther {
+		t.Errorf("old session still works after the config password changed: %d", code)
+	}
+}
+
+func TestSecurityHeaders(t *testing.T) {
+	e := demoServerWith(t, nil, func(s *Server) { s.Cfg.PublicURL = "https://pm.example.com" })
+	resp, err := http.Get(e.srv.URL + "/login")
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	h := resp.Header
+	for k, want := range map[string]string{"X-Frame-Options": "DENY", "X-Content-Type-Options": "nosniff",
+		"Strict-Transport-Security": "max-age=31536000", "Cache-Control": "no-store"} {
+		if h.Get(k) != want {
+			t.Errorf("%s = %q", k, h.Get(k))
+		}
+	}
+	if !strings.Contains(h.Get("Content-Security-Policy"), "frame-ancestors 'none'") {
+		t.Errorf("CSP = %q", h.Get("Content-Security-Policy"))
+	}
+	addUser(t, e, "somchai", config.RoleAdmin, "correct horse battery")
+	r, _ := http.NewRequest("POST", e.srv.URL+"/login", strings.NewReader("username=somchai&password=correct+horse+battery"))
+	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	resp, _ = noFollow.Do(r)
+	resp.Body.Close()
+	for _, c := range resp.Cookies() {
+		if c.Name == sessionCookie && !c.Secure {
+			t.Error("session cookie should be Secure when public_url is https")
+		}
+	}
+}
+
+func TestLockoutOfUnknownNamesStaysOutOfActivity(t *testing.T) {
+	e := demoServer(t, nil)
+	b := newBrowser(t, e)
+	for i := 0; i < 5; i++ {
+		b.login("no-such-user", "guess")
+	}
+	for _, a := range e.store.Audit(5) {
+		if strings.Contains(a.Action, "no-such-user") {
+			t.Error("lockouts of made-up usernames shouldn't fill the activity log")
+		}
+	}
+}
+
+// FuzzSafeNext: whatever comes in, the redirect stays a plain path on this site.
+func FuzzSafeNext(f *testing.F) {
+	for _, s := range []string{"/", "/sites/bkk1?x=1", "//evil", "/\t/evil", `/\evil`, "https://evil", "/%2F%2Fevil", "/\x00", "/ok#frag"} {
+		f.Add(s)
+	}
+	f.Fuzz(func(t *testing.T, in string) {
+		out := safeNext(in)
+		if !strings.HasPrefix(out, "/") || strings.HasPrefix(out, "//") || strings.ContainsAny(out, "\\\t\r\n\x00") {
+			t.Fatalf("safeNext(%q) = %q", in, out)
+		}
+		u, err := url.Parse(out)
+		if err != nil || u.Host != "" || u.Scheme != "" {
+			t.Fatalf("safeNext(%q) = %q leaves the site", in, out)
+		}
+	})
 }

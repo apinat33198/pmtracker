@@ -5,9 +5,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 )
@@ -34,12 +36,21 @@ func (t Telegram) Send(ctx context.Context, text string) error {
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		return fmt.Errorf("telegram: %w", err)
+		// The request URL holds the bot token: report the cause without it.
+		var ue *url.Error
+		if errors.As(err, &ue) {
+			err = ue.Err
+		}
+		return fmt.Errorf("telegram: sendMessage: %w", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		b, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
-		return fmt.Errorf("telegram: HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(b)))
+		msg := strings.TrimSpace(string(b))
+		if t.BotToken != "" {
+			msg = strings.ReplaceAll(msg, t.BotToken, "…")
+		}
+		return fmt.Errorf("telegram: HTTP %d: %s", resp.StatusCode, msg)
 	}
 	return nil
 }

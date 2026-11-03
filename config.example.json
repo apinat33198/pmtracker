@@ -24,8 +24,10 @@
   "keywords": ["MA visit"],
   "holidays": [],
 
-  "feed": {"token": "replace-with-a-long-random-string"},
+  "feed": {"token": ""},
   "digest": {"time": "08:00", "telegram_bot_token": "", "telegram_chat_id": ""},
+
+  "trusted_proxies": ["127.0.0.1", "::1"],
 
   "auth": {
     "anonymous_access": "none",

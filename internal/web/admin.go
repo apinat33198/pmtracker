@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -849,9 +850,9 @@ func (s *Server) adminCalendars(w http.ResponseWriter, r *http.Request) {
 		d.Rows = append(d.Rows, calRow{Cal: c, State: s.Store.CalendarState(c.ID)})
 	}
 	if s.Cfg.Feed.Token != "" {
-		d.FeedURL = baseURL(r) + "/forecast.ics?token=" + s.Cfg.Feed.Token
+		d.FeedURL = s.baseURL(r) + "/forecast.ics?token=" + url.QueryEscape(s.Cfg.Feed.Token)
 	}
-	d.Digest = core.Digest(snap, baseURL(r))
+	d.Digest = core.Digest(snap, s.baseURL(r))
 	s.render(w, r, "admin_calendars", "admin", "Calendars and sync", snap, d)
 }
 
@@ -972,27 +973,43 @@ func (s *Server) adminImportPost(w http.ResponseWriter, r *http.Request) {
 	}
 	u := userOf(r)
 	apply := r.FormValue("mode") == "apply"
-	cat := s.Store.Catalog()
-	res, visits, err := core.ApplyImport(&cat, strings.NewReader(text), lastPM, s.Now(), s.Cfg.Location(), u.Name)
-	d.Result = &res
+	run := func(c *core.Catalog) ([]core.ManualVisit, error) {
+		res, visits, err := core.ApplyImport(c, strings.NewReader(text), lastPM, s.Now(), s.Cfg.Location(), u.Name)
+		d.Result = &res
+		if err == nil && apply && res.Errors > 0 {
+			err = fmt.Errorf("Nothing was imported: %d %s fixing first. Correct or remove %s and import again.",
+				res.Errors, plural(res.Errors, "row needs", "rows need"), plural(res.Errors, "it", "them"))
+		}
+		return visits, err
+	}
+	if !apply {
+		cat := s.Store.Catalog()
+		if _, err := run(&cat); err != nil {
+			d.Error = err.Error()
+		}
+		s.render(w, r, "admin_import", "admin", "Import", s.snapshot(), d)
+		return
+	}
+	// Apply against the live catalog, so edits made since the page loaded are kept.
+	var visits []core.ManualVisit
+	err := s.Store.UpdateCatalog(u.Name, "", func(c *core.Catalog) error {
+		var err error
+		visits, err = run(c)
+		return err
+	})
+	if err == nil {
+		summary := fmt.Sprintf("Imported CSV: %d sites, %d vendors, %d systems, %d tasks added, %d tasks updated, %d last PM dates",
+			d.Result.SitesCreated, d.Result.VendorsCreated, d.Result.SystemsCreated, d.Result.TasksCreated, d.Result.TasksUpdated, d.Result.VisitsAdded)
+		if len(visits) > 0 {
+			err = s.Store.AddManual(summary, visits...)
+		} else {
+			err = s.Store.Log(u.Name, summary)
+		}
+	}
 	if err != nil {
 		d.Error = err.Error()
-	}
-	if apply && err == nil {
-		summary := fmt.Sprintf("Imported CSV: %d sites, %d vendors, %d systems, %d tasks added, %d tasks updated, %d last PM dates",
-			res.SitesCreated, res.VendorsCreated, res.SystemsCreated, res.TasksCreated, res.TasksUpdated, res.VisitsAdded)
-		err = s.Store.UpdateCatalog(u.Name, summary, func(c *core.Catalog) error {
-			*c = cat
-			return nil
-		})
-		if err == nil {
-			err = s.Store.AddManual("", visits...)
-		}
-		if err != nil {
-			d.Error = err.Error()
-		} else {
-			d.Applied = true
-		}
+	} else {
+		d.Applied = true
 	}
 	s.render(w, r, "admin_import", "admin", "Import", s.snapshot(), d)
 }

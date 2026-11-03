@@ -20,6 +20,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -112,8 +113,19 @@ func run(cmd, cfgPath string, demoMode, keep bool, addr, dataPath, todayFlag str
 	}
 
 	if demoMode && !keep {
+		// Only ever replace demo data: "-demo -data <real file>" must not wipe it.
+		if old, err := store.Open(cfg.DataFile); err == nil {
+			if cat := old.Catalog(); !old.IsDemo() && len(cat.Sites)+len(old.Users()) > 0 && filepath.Base(cfg.DataFile) != "pmtracker-demo.json" {
+				return fmt.Errorf("%s isn't demo data; refusing to replace it. Pick another -data file for the demo", cfg.DataFile)
+			}
+		}
 		if err := os.Remove(cfg.DataFile); err != nil && !errors.Is(err, os.ErrNotExist) {
 			return err
+		}
+	}
+	if !demoMode {
+		if problems := cfg.SecretProblems(); len(problems) > 0 {
+			return errors.New("config: " + strings.Join(problems, "; "))
 		}
 	}
 	st, err := store.Open(cfg.DataFile)
@@ -135,6 +147,11 @@ func run(cmd, cfgPath string, demoMode, keep bool, addr, dataPath, todayFlag str
 			return nil
 		})
 		if err != nil {
+			return err
+		}
+	}
+	if demoMode && !st.IsDemo() {
+		if err := st.MarkDemo(); err != nil {
 			return err
 		}
 	}
@@ -218,7 +235,8 @@ func run(cmd, cfgPath string, demoMode, keep bool, addr, dataPath, todayFlag str
 	if err != nil {
 		return err
 	}
-	hs := &http.Server{Addr: cfg.Listen, Handler: h, ReadHeaderTimeout: 10 * time.Second, WriteTimeout: 120 * time.Second}
+	hs := &http.Server{Addr: cfg.Listen, Handler: h, ReadHeaderTimeout: 10 * time.Second, ReadTimeout: time.Minute,
+		WriteTimeout: 2 * time.Minute, IdleTimeout: 2 * time.Minute, MaxHeaderBytes: 64 << 10}
 	go func() {
 		<-ctx.Done()
 		sctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

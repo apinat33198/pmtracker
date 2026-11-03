@@ -445,3 +445,42 @@ func TestVendorManagement(t *testing.T) {
 		t.Error("activity log should record the move")
 	}
 }
+
+func TestExportEscapesFormulas(t *testing.T) {
+	e := demoServer(t, nil)
+	post(t, e, "/admin/sites", url.Values{"code": {"=HYPERLINK(1)"}, "name": {"+cmd"}, "vendor_ups": {"abcpower"}})
+	csv := get(t, e, "/export.csv")
+	if !strings.Contains(csv, "'=HYPERLINK(1)") || !strings.Contains(csv, "'+cmd") {
+		t.Errorf("formula-like cells should be prefixed: %s", csv[strings.Index(csv, "HYPERLINK")-5:][:60])
+	}
+}
+
+func TestMarkNeedsARealVisit(t *testing.T) {
+	e := demoServer(t, nil)
+	before := len(e.store.Inputs().Marks)
+	if msg := post(t, e, "/visits/mark", url.Values{"visit": {"ev:nonsense"}, "status": {"done"}}); !strings.Contains(msg, "no longer on record") {
+		t.Errorf("mark unknown visit: %q", msg)
+	}
+	if len(e.store.Inputs().Marks) != before {
+		t.Error("a mark for a visit that doesn't exist was stored")
+	}
+}
+
+func TestImportIsAllOrNothing(t *testing.T) {
+	e := demoServer(t, nil)
+	before := e.store.Catalog()
+	csv := "site_code,system,vendor,last_pm_date\nKBI1,UPS,ABC Power,2026-10-01\nKBI1,CRAC,CoolAir Services,31/31/2026\n"
+	_, body, _ := req(t, "POST", e.srv.URL+"/admin/import", "admin", url.Values{"csv": {csv}, "mode": {"apply"}})
+	if !strings.Contains(body, "Nothing was imported: 1 row need") {
+		t.Errorf("apply with a bad row should import nothing: %.300s", body[strings.Index(body, "<main>"):])
+	}
+	if after := e.store.Catalog(); len(after.Sites) != len(before.Sites) || len(after.Tasks) != len(before.Tasks) {
+		t.Error("a partial import was saved")
+	}
+	if _, err := core.ParseDate("01/01/1543", time.UTC); err == nil {
+		t.Error("year 1000 (1543 BE) should be refused")
+	}
+	if d, err := core.ParseDate("14/09/2569", time.UTC); err != nil || d.Year() != 2026 {
+		t.Errorf("Buddhist year: %v %v", d, err)
+	}
+}

@@ -29,6 +29,9 @@ import (
 	"github.com/apinat33198/pmtracker/internal/core"
 )
 
+// maxPages caps one listing (250 events a page) in case paging never ends.
+const maxPages = 400
+
 // ReadOnlyScope is the narrowest scope that can list events on shared calendars.
 const ReadOnlyScope = "https://www.googleapis.com/auth/calendar.events.readonly"
 
@@ -219,7 +222,10 @@ type apiList struct {
 func (g *Google) List(ctx context.Context, calendarID, syncToken string, timeMin time.Time) ([]core.Event, string, error) {
 	var out []core.Event
 	pageToken := ""
-	for {
+	for page := 0; ; page++ {
+		if page == maxPages {
+			return nil, "", fmt.Errorf("events.list: more than %d pages; stopping", maxPages)
+		}
 		q := url.Values{}
 		q.Set("singleEvents", "true")
 		q.Set("maxResults", "250")

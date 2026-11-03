@@ -67,10 +67,9 @@ func (s *Syncer) syncOne(ctx context.Context, calID string) Result {
 
 	events, next, err := s.Source.List(ctx, calID, st.SyncToken, timeMin)
 	if errors.Is(err, ErrSyncTokenGone) {
+		// Re-read everything. The mirror is replaced only once the full
+		// listing has arrived, so a failure here leaves the old copy in place.
 		s.Log.Printf("sync %s: token invalidated, running a full sync", calID)
-		if err := s.Store.ResetCalendar(calID); err != nil {
-			return Result{Calendar: calID, Err: err}
-		}
 		full = true
 		events, next, err = s.Source.List(ctx, calID, "", timeMin)
 	}

@@ -179,19 +179,30 @@ top right).
   an admin setting a new one, or **Sign out everywhere else** ends the
   account's other sessions; deleting an account ends all of them.
 - Five wrong passwords for a username from one address block it for 15
-  minutes; 20 from one address block that address. Blocks are logged under
-  **Admin, Activity**.
+  minutes; 20 from one address block that address (IPv6 is counted per /64).
+  Blocks of real accounts are logged under **Admin, Activity**.
 - Form posts from other sites are refused (`Origin` and `Sec-Fetch-Site`
-  checks), and pages can't be framed.
-- Behind a reverse proxy on the same host (nginx, Caddy, cloudflared) the
-  client address comes from `X-Forwarded-For`; set `public_url` so the
-  sign-in cookie is marked Secure and origin checks match.
+  checks), pages can't be framed, and redirects after sign-in only go to
+  pages on this site. Messages shown after an action are signed, so a link
+  can't put text on the page.
+- Requests are capped at 1 MB (6 MB for the CSV import, 64 KB for sign-in).
+- With an `https://` `public_url`, cookies are always Secure and browsers are
+  told to use HTTPS only (HSTS).
+
+**Behind a proxy** (nginx, Caddy, cloudflared, Docker): set `public_url` to
+the address people use, and list the proxy in `trusted_proxies` so the
+lockout counts the real client and not the proxy. The default trusts only
+loopback, which covers a proxy on the same host. Under Docker the proxy
+usually connects from the bridge network, so add it, for example
+`"trusted_proxies": ["127.0.0.1", "::1", "172.16.0.0/12"]`. If you leave it
+out there, every visitor shares the proxy's address and one person guessing
+passwords can block sign-in for everyone.
 
 **Options** in `auth`:
 
 - `anonymous_access`: `"none"` (default) or `"viewer"` to let people who
   haven't signed in view the pages; changes still need a sign-in. The demo uses
-  `"viewer"`.
+  `"viewer"`. Keep `"none"` on anything reachable from the internet.
 - `session_hours`: how long a sign-in lasts without "keep me signed in".
 - `users`: optional break-glass accounts defined in the config file. They
   can't be edited from the web, so they still work if the data file's accounts
@@ -205,7 +216,10 @@ top right).
 
 Scripts can use HTTP basic auth with any account, for example
 `curl -u reports:… https://pm.example.com/export.csv`. The calendar feed
-(`/forecast.ics?token=…`) uses its own token.
+(`/forecast.ics?token=…`) uses its own token: anyone with the link can read
+the forecast, so set `feed.token` to a random value (`openssl rand -hex 24`)
+or leave it empty to turn the feed off. The server won't start with the
+example value or a token shorter than 24 characters.
 
 **Locked out?** Add a user to `auth.users` in the config with a hashed
 password and restart, sign in as them, and set a new password for your
@@ -214,11 +228,27 @@ account under Admin, Users.
 ## Deploy
 
 Proxmox LXC or any Linux host: `deploy/pmtracker.service` has the install
-steps in its header. Prebuilt static binaries are in `dist/`, or build one:
+steps in its header. Build with a Go release that still gets security fixes
+(1.26 or 1.27 as of November 2026; 1.24 and 1.25 are out of support):
 
 ```sh
+go version   # go1.26.x or go1.27.x
 CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o pmtracker ./cmd/pmtracker
 ```
+
+**Before going live**
+
+- HTTPS in front (Caddy, nginx or Cloudflare Tunnel), `public_url` set to the
+  `https://` address, the proxy listed in `trusted_proxies` if it isn't on the
+  same host.
+- `feed.token` random or empty; Telegram bot token and service-account key
+  readable only by the service (`chmod 640`, owner root, group pmtracker).
+- First admin created from the setup link, then one account per person
+  under Admin, Users. No shared accounts; config-file users only as break-glass,
+  with hashed passwords.
+- Back up the data file. It holds password hashes and the session key, so keep
+  backups private. If it leaks, rotate: stop the service, delete
+  `session_secret` from the file (everyone signs in again), and reset passwords.
 
 Docker: `docker build -t pmtracker .`, then mount your config at `/config`
 and a data volume at `/data`.

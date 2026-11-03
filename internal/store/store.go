@@ -51,6 +51,8 @@ type state struct {
 	Users     []auth.User               `json:"users"`
 	// SessionSecret signs session cookies; generated on first use.
 	SessionSecret []byte `json:"session_secret,omitempty"`
+	// Demo marks a file created by -demo, which -demo may replace.
+	Demo bool `json:"demo,omitempty"`
 }
 
 type Store struct {
@@ -113,7 +115,16 @@ func (s *Store) save() error {
 		os.Remove(tmp.Name())
 		return err
 	}
-	return os.Rename(tmp.Name(), s.path)
+	if err := os.Rename(tmp.Name(), s.path); err != nil {
+		os.Remove(tmp.Name())
+		return err
+	}
+	// Make the rename itself survive a power cut.
+	if d, err := os.Open(filepath.Dir(s.path)); err == nil {
+		d.Sync()
+		d.Close()
+	}
+	return nil
 }
 
 func (s *Store) audit(by, action string) {
@@ -145,7 +156,8 @@ func (s *Store) Catalog() core.Catalog {
 }
 
 // UpdateCatalog applies fn to a copy, validates it and saves it with an
-// audit entry. References to deleted tasks and calendars are cleaned up.
+// audit entry (none when action is empty). References to deleted tasks and
+// calendars are cleaned up.
 func (s *Store) UpdateCatalog(by, action string, fn func(*core.Catalog) error) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -158,7 +170,9 @@ func (s *Store) UpdateCatalog(by, action string, fn func(*core.Catalog) error) e
 	}
 	s.st.Catalog = c
 	s.cleanup()
-	s.audit(by, action)
+	if action != "" {
+		s.audit(by, action)
+	}
 	return s.save()
 }
 
@@ -269,20 +283,6 @@ func (s *Store) calendar(id string) *CalendarState {
 	return c
 }
 
-// ResetCalendar forgets a calendar's sync token and mirrored events
-// (the response to a 410 Gone). Decisions and marks are kept.
-func (s *Store) ResetCalendar(id string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.calendar(id).SyncToken = ""
-	for k, e := range s.st.Events {
-		if e.CalendarID == id {
-			delete(s.st.Events, k)
-		}
-	}
-	return s.save()
-}
-
 // ApplySync stores one sync result. On a full sync, events missing from the
 // result are dropped. Deletions arrive as status "cancelled", often with no
 // other fields, so the previous copy is kept and marked cancelled. Moves of
@@ -290,6 +290,9 @@ func (s *Store) ResetCalendar(id string) error {
 func (s *Store) ApplySync(calendarID string, full bool, events []core.Event, nextToken string, at time.Time) (int, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if _, ok := s.st.Catalog.Calendar(calendarID); !ok {
+		return 0, nil // removed by an admin while the sync was running
+	}
 	changed := 0
 	seen := map[string]bool{}
 	for _, e := range events {
@@ -352,6 +355,9 @@ func sameEvent(a, b core.Event) bool {
 func (s *Store) SetSyncError(calendarID string, err error, at time.Time) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if _, ok := s.st.Catalog.Calendar(calendarID); !ok {
+		return nil
+	}
 	c := s.calendar(calendarID)
 	c.LastError, c.LastErrorAt = err.Error(), at
 	return s.save()
@@ -553,4 +559,19 @@ func (s *Store) SessionSecret() ([]byte, error) {
 		}
 	}
 	return append([]byte(nil), s.st.SessionSecret...), nil
+}
+
+// MarkDemo flags the file as demo data that -demo may replace.
+func (s *Store) MarkDemo() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.st.Demo = true
+	return s.save()
+}
+
+// IsDemo reports whether the file was created by -demo.
+func (s *Store) IsDemo() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.st.Demo
 }

@@ -219,6 +219,9 @@ func ParseDate(s string, loc *time.Location) (time.Time, error) {
 			if d.Year() > 2400 { // Buddhist Era
 				d = d.AddDate(-543, 0, 0)
 			}
+			if d.Year() < 1990 || d.Year() > 2100 {
+				return time.Time{}, fmt.Errorf("%q is outside 1990 to 2100; check the year", s)
+			}
 			return d, nil
 		}
 	}

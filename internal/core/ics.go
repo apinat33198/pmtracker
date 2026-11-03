@@ -63,7 +63,7 @@ func ForecastICS(cfg *config.Config, s Snapshot, now time.Time) string {
 }
 
 func escapeICS(s string) string {
-	r := strings.NewReplacer(`\`, `\\`, ";", `\;`, ",", `\,`, "\r\n", `\n`, "\n", `\n`)
+	r := strings.NewReplacer(`\`, `\\`, ";", `\;`, ",", `\,`, "\r\n", `\n`, "\n", `\n`, "\r", `\n`)
 	return r.Replace(s)
 }
 
