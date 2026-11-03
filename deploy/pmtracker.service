@@ -5,6 +5,7 @@
 #   install -m 0755 pmtracker-linux-amd64 /usr/local/bin/pmtracker
 #   install -d -m 0750 -o root -g pmtracker /etc/pmtracker
 #   install -m 0640 -o root -g pmtracker config.json service-account.json /etc/pmtracker/
+#   install -d -m 0700 -o pmtracker -g pmtracker /var/lib/pmtracker
 #   cp pmtracker.service /etc/systemd/system/ && systemctl daemon-reload
 #   sudo -u pmtracker pmtracker -config /etc/pmtracker/config.json check
 #   systemctl enable --now pmtracker
