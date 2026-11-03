@@ -23,7 +23,7 @@
           <summary>Restore…</summary>
           <form method="post" action="/admin/backups/restore">
             <input type="hidden" name="name" value="{{$f.Name}}">
-            <span class="field-hint">Replaces all current data with this backup. A copy of the current data is saved first.</span>
+            <span class="field-hint">Replaces all current data with this backup and signs everyone out. A copy of the current data is saved first.</span>
             <label class="stack"><span>Type <b>restore</b> to confirm</span> <input name="confirm" autocomplete="off" required></label>
             <button class="danger-button">Restore this backup</button>
           </form>
@@ -38,7 +38,7 @@
 
 <h2>Restore from a file</h2>
 <form class="danger" method="post" action="/admin/backups/upload" enctype="multipart/form-data">
-  <p>For moving to a new server or recovering after a loss: upload a backup downloaded from this page (<code>.json.gz</code>), or a copy of the data file (<code>.json</code>). This replaces all current data; a copy of the current data is saved first.</p>
+  <p>For moving to a new server or recovering after a loss: upload a backup downloaded from this page (<code>.json.gz</code>), or a copy of the data file (<code>.json</code>). This replaces all current data and signs everyone out; a copy of the current data is saved first. Only restore files you made yourself: a backup also holds the accounts and passwords.</p>
   <label class="stack">Backup file <input type="file" name="file" accept=".gz,.json" required></label>
   <label class="stack"><span>Type <b>restore</b> to confirm</span> <input name="confirm" autocomplete="off" required></label>
   <button class="danger-button">Restore from this file</button>

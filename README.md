@@ -179,8 +179,12 @@ top right).
   an admin setting a new one, or **Sign out everywhere else** ends the
   account's other sessions; deleting an account ends all of them.
 - Five wrong passwords for a username from one address block it for 15
-  minutes; 20 from one address block that address (IPv6 is counted per /64).
-  Blocks of real accounts are logged under **Admin, Activity**.
+  minutes; 20 from one address block that address (IPv6 is counted per /64);
+  30 for one username from any mix of addresses block that username. Blocks of
+  real accounts are logged under **Admin, Activity**.
+- With an `https://` `public_url`, the tracker won't take a password over plain
+  HTTP from another machine (someone opening `http://<LAN address>:8080`): the
+  sign-in page points to the HTTPS address instead.
 - Form posts from other sites are refused (`Origin` and `Sec-Fetch-Site`
   checks), pages can't be framed, and redirects after sign-in only go to
   pages on this site. Messages shown after an action are signed, so a link
@@ -239,8 +243,10 @@ one (type `restore` to confirm; the current data is saved as a
 move the tracker to a new server.
 
 Backups don't contain the key that signs sign-in cookies, but they do contain
-password hashes, so keep downloaded copies private. Downloads are recorded
-under Admin, Activity.
+password hashes, so keep downloaded copies private and only restore files you
+made. Downloads are recorded under Admin, Activity. A restore never takes a
+signing key from the file, and signs everyone out, so sign-ins from before
+the restore (including ones of accounts deleted since the backup) stop working.
 
 ```json
 "backup": {"time": "02:30", "keep_days": 30, "dir": ""}
@@ -320,7 +326,7 @@ Updates from your Mac: `deploy/push.sh root@pm-tracker` runs the tests,
 builds, copies the binary, keeps a copy of the data file as
 `data.json.before-update`, and restarts the service.
 
-If cloudflared already runs in **another container**, the tracker has to listen
+If cloudflared already runs on **another machine or container**, the tracker has to listen
 on its own address instead: `"listen": "0.0.0.0:8080"`, list the cloudflared
 container's IP in `trusted_proxies`, point the tunnel at
 `http://<tracker container IP>:8080`, and use the Proxmox firewall on the

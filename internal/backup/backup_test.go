@@ -1,6 +1,8 @@
 package backup
 
 import (
+	"bytes"
+	"compress/gzip"
 	"io"
 	"log"
 	"os"
@@ -115,5 +117,18 @@ func TestCatchUp(t *testing.T) {
 	*now = now.Add(30 * time.Hour)
 	if !m.due() {
 		t.Error("over a day without a backup: one is due")
+	}
+}
+
+func TestDecodeRefusesZipBombs(t *testing.T) {
+	var buf bytes.Buffer
+	zw := gzip.NewWriter(&buf)
+	zw.Write(make([]byte, maxSize+1024))
+	zw.Close()
+	if buf.Len() > 1<<20 {
+		t.Fatalf("test file is %d bytes", buf.Len())
+	}
+	if _, err := Decode(&buf); err == nil {
+		t.Error("a small file that expands past the limit should be refused")
 	}
 }

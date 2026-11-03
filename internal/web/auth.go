@@ -164,7 +164,7 @@ func (s *Server) authenticate(next http.Handler) http.Handler {
 		case "/admin/import":
 			limit = 6 << 20
 		case "/admin/backups/upload":
-			limit = 64 << 20
+			limit = 32 << 20
 		case "/login", "/setup":
 			limit = 64 << 10
 		}
@@ -236,6 +236,9 @@ func (s *Server) sameOrigin(r *http.Request) bool {
 // identify returns the user, or a message when basic-auth credentials are wrong.
 func (s *Server) identify(r *http.Request) (user, string) {
 	if name, pass, ok := r.BasicAuth(); ok {
+		if s.plainHTTP(r) {
+			return user{}, "Passwords aren't accepted over an unencrypted connection. Use " + s.publicBase() + "."
+		}
 		addr := s.clientAddr(r)
 		if wait := s.limiter.Blocked(name, addr, s.Now()); wait > 0 {
 			return user{}, "Too many failed sign-ins. Try again in " + minutes(wait) + "."
@@ -361,6 +364,28 @@ func (s *Server) clientAddr(r *http.Request) string {
 	return addr.String()
 }
 
+// plainHTTP reports a request that came straight from another machine over
+// unencrypted HTTP while the tracker is published over HTTPS, such as
+// someone opening http://<LAN address>:8080. Passwords typed there would
+// cross the network readable, so sign-in is refused and pointed to the
+// HTTPS address. Requests from this machine or from a trusted proxy, and
+// requests a proxy marks as HTTPS, are fine.
+func (s *Server) plainHTTP(r *http.Request) bool {
+	if !s.Cfg.HTTPS() || r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https" {
+		return false
+	}
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return false
+	}
+	a, err := netip.ParseAddr(host)
+	if err != nil {
+		return false
+	}
+	a = a.Unmap()
+	return !a.IsLoopback() && !s.Cfg.TrustedProxy(a)
+}
+
 func (s *Server) isHTTPS(r *http.Request) bool {
 	return r.TLS != nil || s.Cfg.HTTPS() || r.Header.Get("X-Forwarded-Proto") == "https"
 }
@@ -454,6 +479,7 @@ func (s *Server) clearSession(w http.ResponseWriter, r *http.Request) {
 type loginData struct {
 	Next, Username, Error string
 	Keep, Demo            bool
+	SecureURL             string // set when this page was opened over plain HTTP
 }
 
 func (s *Server) loginPage(w http.ResponseWriter, r *http.Request) {
@@ -462,12 +488,21 @@ func (s *Server) loginPage(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, next, http.StatusSeeOther)
 		return
 	}
-	s.renderCode(w, r, http.StatusOK, "login", "", "Sign in", core.Snapshot{}, loginData{Next: next, Demo: s.Demo})
+	d := loginData{Next: next, Demo: s.Demo}
+	if s.plainHTTP(r) {
+		d.SecureURL = s.publicBase() + "/login?next=" + url.QueryEscape(next)
+	}
+	s.renderCode(w, r, http.StatusOK, "login", "", "Sign in", core.Snapshot{}, d)
 }
 
 func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	name := strings.ToLower(strings.TrimSpace(r.FormValue("username")))
 	d := loginData{Next: safeNext(r.FormValue("next")), Username: name, Keep: r.FormValue("keep") != "", Demo: s.Demo}
+	if s.plainHTTP(r) {
+		d.SecureURL = s.publicBase() + "/login?next=" + url.QueryEscape(d.Next)
+		s.renderCode(w, r, http.StatusForbidden, "login", "", "Sign in", core.Snapshot{}, d)
+		return
+	}
 	addr := s.clientAddr(r)
 	if wait := s.limiter.Blocked(name, addr, s.Now()); wait > 0 {
 		d.Error = "Too many failed sign-ins. Try again in " + minutes(wait) + "."
@@ -499,6 +534,7 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 type setupData struct {
 	Token, Username, Error string
 	Valid                  bool
+	SecureURL              string
 }
 
 func (s *Server) validSetupToken(tok string) bool {
@@ -518,7 +554,11 @@ func (s *Server) setupPage(w http.ResponseWriter, r *http.Request) {
 	if !s.validSetupToken(tok) {
 		code = http.StatusForbidden
 	}
-	s.renderCode(w, r, code, "setup", "", "Create the first admin", core.Snapshot{}, setupData{Token: tok, Valid: code == http.StatusOK})
+	d := setupData{Token: tok, Valid: code == http.StatusOK}
+	if s.plainHTTP(r) {
+		d.SecureURL = s.publicBase() + "/setup?token=" + url.QueryEscape(tok)
+	}
+	s.renderCode(w, r, code, "setup", "", "Create the first admin", core.Snapshot{}, d)
 }
 
 func (s *Server) setup(w http.ResponseWriter, r *http.Request) {
@@ -530,6 +570,11 @@ func (s *Server) setup(w http.ResponseWriter, r *http.Request) {
 	}
 	tok := r.FormValue("token")
 	d := setupData{Token: tok, Valid: s.setupToken != "" && subtle.ConstantTimeCompare([]byte(tok), []byte(s.setupToken)) == 1}
+	if s.plainHTTP(r) {
+		d.SecureURL = s.publicBase() + "/setup?token=" + url.QueryEscape(tok)
+		s.renderCode(w, r, http.StatusForbidden, "setup", "", "Create the first admin", core.Snapshot{}, d)
+		return
+	}
 	if !d.Valid {
 		s.renderCode(w, r, http.StatusForbidden, "setup", "", "Create the first admin", core.Snapshot{}, d)
 		return

@@ -294,6 +294,12 @@ func (c *Config) TrustedProxy(a netip.Addr) bool {
 // with only loopback trusted, so a proxy on another host (cloudflared, nginx)
 // would make every visitor share the proxy's address for the sign-in lockout.
 func (c *Config) ProxyWarning() string {
+	for _, p := range c.proxies {
+		if !p.Addr().IsLoopback() && p.Bits() < p.Addr().BitLen() {
+			return fmt.Sprintf("trusted_proxies includes the range %s: any device there can claim to be any address. "+
+				"List the proxy's own address instead (for example the machine running cloudflared)", p)
+		}
+	}
 	host, _, err := net.SplitHostPort(c.Listen)
 	if err != nil || !c.defaultProxies {
 		return ""

@@ -3,6 +3,10 @@
   <h1>Sign in</h1>
   <p class="lede">Preventive maintenance across your sites.</p>
   {{with $d.Error}}<p class="flash error" role="alert">{{.}}</p>{{end}}
+  {{if $d.SecureURL}}
+  <p class="flash error" role="alert">This address isn't encrypted, so passwords typed here could be read on the network.</p>
+  <p><a class="button wide-link" href="{{$d.SecureURL}}">Continue at {{$d.SecureURL}}</a></p>
+  {{else}}
   <form method="post" action="/login">
     <input type="hidden" name="next" value="{{$d.Next}}">
     <label class="stack">Username <input name="username" value="{{$d.Username}}" autocomplete="username" autocapitalize="none" spellcheck="false" required{{if not $d.Username}} autofocus{{end}}></label>
@@ -10,6 +14,7 @@
     <label class="check-line"><input type="checkbox" name="keep"{{if $d.Keep}} checked{{end}}> Keep me signed in on this device for 30 days</label>
     <button type="submit" class="wide">Sign in</button>
   </form>
+  {{end}}
   {{if $d.Demo}}
   <div class="demo-accounts">
     <p class="strong">Demo accounts, all with the password <code>demo</code></p>

@@ -168,10 +168,13 @@ func RandomToken() string {
 }
 
 // Limiter locks out a username (per client address) after repeated failed
-// sign-ins, and a client address after many failures across usernames.
+// sign-ins, a client address after many failures across usernames, and a
+// username after many failures from any address (a backstop for when
+// addresses can be faked, such as a whole network in trusted_proxies).
 type Limiter struct {
 	MaxPerUser int           // failures per username+address before lockout
 	MaxPerAddr int           // failures per address before lockout
+	MaxPerName int           // failures per username from all addresses before lockout
 	Window     time.Duration // failures older than this are forgotten
 	Lockout    time.Duration
 
@@ -181,19 +184,20 @@ type Limiter struct {
 }
 
 func NewLimiter() *Limiter {
-	return &Limiter{MaxPerUser: 5, MaxPerAddr: 20, Window: 15 * time.Minute, Lockout: 15 * time.Minute,
+	return &Limiter{MaxPerUser: 5, MaxPerAddr: 20, MaxPerName: 30, Window: 15 * time.Minute, Lockout: 15 * time.Minute,
 		failures: map[string][]time.Time{}, locked: map[string]time.Time{}}
 }
 
 func userKey(username, addr string) string { return "u|" + strings.ToLower(username) + "|" + addr }
 func addrKey(addr string) string           { return "a|" + addr }
+func nameKey(username string) string       { return "n|" + strings.ToLower(username) }
 
 // Blocked reports how long until this username+address may try again (0 = allowed).
 func (l *Limiter) Blocked(username, addr string, now time.Time) time.Duration {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	var wait time.Duration
-	for _, k := range []string{userKey(username, addr), addrKey(addr)} {
+	for _, k := range []string{userKey(username, addr), addrKey(addr), nameKey(username)} {
 		if until, ok := l.locked[k]; ok {
 			if now.Before(until) {
 				if d := until.Sub(now); d > wait {
@@ -243,7 +247,7 @@ func (l *Limiter) Fail(username, addr string, now time.Time) bool {
 	for _, kv := range []struct {
 		key string
 		max int
-	}{{userKey(username, addr), l.MaxPerUser}, {addrKey(addr), l.MaxPerAddr}} {
+	}{{userKey(username, addr), l.MaxPerUser}, {addrKey(addr), l.MaxPerAddr}, {nameKey(username), l.MaxPerName}} {
 		var recent []time.Time
 		for _, t := range l.failures[kv.key] {
 			if now.Sub(t) < l.Window {

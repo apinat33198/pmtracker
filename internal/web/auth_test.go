@@ -564,3 +564,77 @@ func TestClientAddressViaCloudflared(t *testing.T) {
 		t.Error("a post from the public hostname should pass the origin check")
 	}
 }
+
+func TestNoPasswordsOverPlainHTTP(t *testing.T) {
+	e := demoServerWith(t, nil, func(s *Server) {
+		s.Cfg.PublicURL = "https://pm.example.com"
+		s.Cfg.TrustedProxies = []string{"192.168.50.10"}
+	})
+	cfg, _ := config.Parse([]byte(`{"public_url": "https://pm.example.com", "trusted_proxies": ["192.168.50.10"], "feed": {"token": "demo"}}`))
+	e.server.Cfg = cfg
+	e.server.Cfg.Auth.Users = []config.User{{Username: "admin", Password: "pw", Role: config.RoleAdmin}}
+	h, err := e.server.Handler()
+	if err != nil {
+		t.Fatal(err)
+	}
+	do := func(method, path, remote string, form url.Values, hdr ...string) *httptest.ResponseRecorder {
+		var r *http.Request
+		if form != nil {
+			r = httptest.NewRequest(method, path, strings.NewReader(form.Encode()))
+			r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		} else {
+			r = httptest.NewRequest(method, path, nil)
+		}
+		r.RemoteAddr = remote
+		for i := 0; i+1 < len(hdr); i += 2 {
+			r.Header.Set(hdr[i], hdr[i+1])
+		}
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		return w
+	}
+	lan := "192.168.50.77:50000"
+	if w := do("GET", "/login", lan, nil); !strings.Contains(w.Body.String(), "isn't encrypted") || strings.Contains(w.Body.String(), `name="password"`) {
+		t.Error("the sign-in page opened on the LAN address should send people to the https address instead of showing the form")
+	}
+	if w := do("POST", "/login", lan, url.Values{"username": {"admin"}, "password": {"pw"}}); w.Code != http.StatusForbidden || len(w.Result().Cookies()) > 0 {
+		t.Errorf("a password posted over plain HTTP from the LAN = %d", w.Code)
+	}
+	r := httptest.NewRequest("GET", "/export.csv", nil)
+	r.RemoteAddr = lan
+	r.SetBasicAuth("admin", "pw")
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	if w.Code != http.StatusUnauthorized || !strings.Contains(w.Body.String(), "unencrypted") {
+		t.Errorf("basic auth over plain HTTP from the LAN = %d", w.Code)
+	}
+	// Through the tunnel (trusted proxy, or marked https) and from the machine itself: fine.
+	for _, c := range []struct {
+		remote string
+		hdr    []string
+	}{{"192.168.50.10:40000", nil}, {"10.1.1.1:40000", []string{"X-Forwarded-Proto", "https"}}, {"127.0.0.1:40000", nil}} {
+		if w := do("GET", "/login", c.remote, nil, c.hdr...); !strings.Contains(w.Body.String(), `name="password"`) {
+			t.Errorf("sign-in form should show for %s %v", c.remote, c.hdr)
+		}
+	}
+}
+
+func TestRestoreSignsEveryoneOut(t *testing.T) {
+	e := demoServer(t, nil)
+	addUser(t, e, "mallory", config.RoleAdmin, "mallory password 1")
+	m := newBrowser(t, e)
+	m.login("mallory", "mallory password 1")
+	post(t, e, "/admin/backups", url.Values{})
+	files, _ := e.server.Backups.List()
+	post(t, e, "/admin/users/mallory/delete", url.Values{})
+	msg := post(t, e, "/admin/backups/restore", url.Values{"name": {files[0].Name}, "confirm": {"restore"}})
+	if !strings.Contains(msg, "Everyone has been signed out") {
+		t.Errorf("restore message: %q", msg)
+	}
+	if code, _, _ := m.do("GET", "/admin/users", nil); code != http.StatusSeeOther {
+		t.Errorf("a deleted account's old sign-in came back after the restore: %d", code)
+	}
+	if code, _ := newBrowser(t, e).login("mallory", "mallory password 1"); code != http.StatusSeeOther {
+		t.Error("the restored account can sign in again with its password")
+	}
+}

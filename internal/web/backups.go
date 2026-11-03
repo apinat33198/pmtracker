@@ -93,7 +93,26 @@ func (s *Server) adminRestoreUpload(w http.ResponseWriter, r *http.Request) {
 		s.redirect(w, r, "/admin/backups", err.Error(), "error")
 		return
 	}
-	s.restore(w, r, data, "the uploaded file "+hdr.Filename)
+	s.restore(w, r, data, "the uploaded file "+cleanName(hdr.Filename))
+}
+
+// cleanName keeps an uploaded file's name safe to show and log.
+func cleanName(name string) string {
+	var b strings.Builder
+	for _, c := range name {
+		if b.Len() >= 80 {
+			b.WriteString("…")
+			break
+		}
+		if c < 0x20 || c == 0x7f {
+			continue
+		}
+		b.WriteRune(c)
+	}
+	if b.Len() == 0 {
+		return "(no name)"
+	}
+	return b.String()
 }
 
 func confirmedRestore(r *http.Request) bool {
@@ -112,8 +131,10 @@ func (s *Server) restore(w http.ResponseWriter, r *http.Request, data []byte, fr
 		s.redirect(w, r, "/admin/backups", "Nothing was restored: "+err.Error(), "error")
 		return
 	}
-	s.Log.Printf("restore: %s restored all data from %s (previous data saved as %s)", u.Name, from, pre.Name)
-	s.redirect(w, r, "/admin/backups", fmt.Sprintf("Restored %s. The data from just before is saved as %s, in case you need it back.", from, pre.Name), "")
+	s.Log.Printf("restore: %s restored all data from %q (previous data saved as %s)", u.Name, from, pre.Name)
+	// Everyone, including whoever restored, signs in again.
+	s.clearSession(w, r)
+	s.redirect(w, r, "/login?next=%2Fadmin%2Fbackups", fmt.Sprintf("Restored %s. Everyone has been signed out, so sign in again. The data from just before is saved as %s, in case you need it back.", from, pre.Name), "")
 }
 
 func sizeText(n int64) string {

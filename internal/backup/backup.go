@@ -36,8 +36,9 @@ var nameRe = regexp.MustCompile(`^pmtracker-(\d{4}-\d{2}-\d{2})(?:-(\d{6})-(manu
 // keepAtLeast newest backups are never pruned, however old.
 const keepAtLeast = 3
 
-// maxSize bounds what Read decompresses (a data file is a few MB at most).
-const maxSize = 256 << 20
+// maxSize bounds what Read decompresses, so a small "zip bomb" can't use
+// up a small container's memory. A data file is a few MB at most.
+const maxSize = 64 << 20
 
 type File struct {
 	Name string

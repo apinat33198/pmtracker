@@ -1,11 +1,13 @@
 package store
 
 import (
+	"encoding/json"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/apinat33198/pmtracker/internal/auth"
 	"github.com/apinat33198/pmtracker/internal/core"
 )
 
@@ -165,5 +167,26 @@ func TestExportAndRestore(t *testing.T) {
 	}
 	if _, ok := s.Catalog().Site("bkk1"); !ok {
 		t.Error("a refused restore must leave the data alone")
+	}
+}
+
+func TestRestoreIsSafe(t *testing.T) {
+	s, _ := Open(filepath.Join(t.TempDir(), "d.json"))
+	key, _ := s.SessionSecret()
+	s.SaveUser(auth.User{Username: "mallory", Role: "admin", Epoch: 3}, "t", "")
+	b, _ := s.Export()
+	// A crafted file with its own signing key.
+	var m map[string]any
+	json.Unmarshal(b, &m)
+	m["session_secret"] = strings.Repeat("A", 44)
+	crafted, _ := json.Marshal(m)
+	if err := s.Restore(crafted, "admin", "Restored"); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := s.SessionSecret(); string(got) != string(key) {
+		t.Error("a restore must never install a signing key from the file")
+	}
+	if u, _ := s.User("mallory"); u.Epoch <= 3 {
+		t.Errorf("restored accounts must be signed out (epoch %d)", u.Epoch)
 	}
 }

@@ -116,3 +116,17 @@ func TestLimiterStaysBounded(t *testing.T) {
 		t.Errorf("limiter holds %d entries", n)
 	}
 }
+
+func TestLimiterCapsGuessesFromFakedAddresses(t *testing.T) {
+	l := NewLimiter()
+	now := time.Date(2026, 11, 3, 12, 0, 0, 0, time.UTC)
+	for i := 0; i < 30; i++ {
+		l.Fail("admin", fmt.Sprintf("10.9.0.%d", i), now)
+	}
+	if l.Blocked("admin", "10.9.1.1", now) == 0 {
+		t.Error("30 failures for one username from any addresses should block it")
+	}
+	if l.Blocked("someone", "10.9.1.1", now) != 0 {
+		t.Error("other usernames aren't affected")
+	}
+}

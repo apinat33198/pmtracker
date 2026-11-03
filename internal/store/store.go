@@ -118,7 +118,7 @@ func (s *Store) Export() ([]byte, error) {
 var ErrNotBackup = errors.New("this isn't a PM tracker backup")
 
 // Restore replaces everything with a backup made by Export, after checking
-// it. Sign-ins keep working with the current signing key.
+// it. Everyone has to sign in again afterwards.
 func (s *Store) Restore(b []byte, by, action string) error {
 	var st state
 	dec := json.NewDecoder(bytes.NewReader(b))
@@ -138,8 +138,20 @@ func (s *Store) Restore(b []byte, by, action string) error {
 	st.normalize()
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if len(st.SessionSecret) < 32 {
-		st.SessionSecret = s.st.SessionSecret
+	// Never take a signing key from a file: whoever made the file would
+	// know it and could forge sign-ins.
+	st.SessionSecret = s.st.SessionSecret
+	// End every session. Otherwise an account deleted or reset after the
+	// backup was made would come back with its old sign-ins still valid.
+	epochs := map[string]int{}
+	for _, u := range s.st.Users {
+		epochs[u.Username] = u.Epoch
+	}
+	for i := range st.Users {
+		if e := epochs[st.Users[i].Username]; e > st.Users[i].Epoch {
+			st.Users[i].Epoch = e
+		}
+		st.Users[i].Epoch++
 	}
 	st.Demo = s.st.Demo
 	prev := s.st

@@ -447,3 +447,4 @@ td.actions .row-menu form { display: grid; margin-left: 0; }
 .backups td.actions .button { padding: 5px 12px; font-size: 13px; margin-right: 6px; }
 .backups .row-menu { display: inline-block; vertical-align: top; }
 form.danger label.stack input[type="file"] { padding: 6px; }
+a.wide-link { display: block; text-align: center; word-break: break-all; }
