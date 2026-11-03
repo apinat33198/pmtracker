@@ -250,6 +250,9 @@ func run(cmd, cfgPath string, demoMode, keep bool, addr, dataPath, todayFlag str
 		defer cancel()
 		hs.Shutdown(sctx)
 	}()
+	if w := cfg.ProxyWarning(); w != "" {
+		logger.Print("Warning: " + w)
+	}
 	logger.Printf("PM tracker listening on %s (data: %s, timezone: %s)", cfg.Listen, cfg.DataFile, cfg.Timezone)
 	if err := hs.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		return err

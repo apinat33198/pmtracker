@@ -70,3 +70,20 @@ func TestProxiesAndSecrets(t *testing.T) {
 		t.Errorf("want proxy and url errors, got %v", err)
 	}
 }
+
+func TestProxyWarning(t *testing.T) {
+	for cfg, warn := range map[string]bool{
+		`{"listen": "127.0.0.1:8080"}`:                              false,
+		`{"listen": ":8080"}`:                                       true,
+		`{"listen": "192.168.50.158:8080"}`:                         true,
+		`{"listen": ":8080", "trusted_proxies": ["192.168.50.10"]}`: false,
+	} {
+		c, err := Parse([]byte(cfg))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := c.ProxyWarning() != ""; got != warn {
+			t.Errorf("%s: warning = %v", cfg, got)
+		}
+	}
+}

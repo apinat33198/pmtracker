@@ -228,7 +228,7 @@ fi
 REMOTE
 
 # --- Cloudflare Tunnel --------------------------------------------------------
-printf '\nSet up a Cloudflare Tunnel so https://%s reaches the tracker? [Y/n] ' "$fqdn"
+printf '\nSet up a Cloudflare Tunnel in this container for https://%s?\n(Answer n if cloudflared already runs on another machine; add a route there instead.) [Y/n] ' "$fqdn"
 read -r ans
 case $ans in
 [nN]*) tunnel=skipped ;;

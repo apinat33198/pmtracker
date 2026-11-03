@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"net/netip"
 	"net/url"
 	"os"
@@ -48,6 +49,8 @@ type Config struct {
 	loc      *time.Location
 	holidays map[string]bool
 	proxies  []netip.Prefix
+	// defaultProxies is true when trusted_proxies wasn't set.
+	defaultProxies bool
 }
 
 type Google struct {
@@ -208,7 +211,8 @@ func (c *Config) finish() error {
 			errs = append(errs, fmt.Sprintf("public_url %q: want https://host[:port]", c.PublicURL))
 		}
 	}
-	if len(c.TrustedProxies) == 0 {
+	c.defaultProxies = len(c.TrustedProxies) == 0
+	if c.defaultProxies {
 		c.TrustedProxies = []string{"127.0.0.0/8", "::1/128"}
 	}
 	c.proxies = nil
@@ -256,6 +260,21 @@ func (c *Config) TrustedProxy(a netip.Addr) bool {
 		}
 	}
 	return false
+}
+
+// ProxyWarning explains a likely misconfiguration: listening beyond loopback
+// with only loopback trusted, so a proxy on another host (cloudflared, nginx)
+// would make every visitor share the proxy's address for the sign-in lockout.
+func (c *Config) ProxyWarning() string {
+	host, _, err := net.SplitHostPort(c.Listen)
+	if err != nil || !c.defaultProxies {
+		return ""
+	}
+	if a, err := netip.ParseAddr(host); err == nil && a.IsLoopback() {
+		return ""
+	}
+	return fmt.Sprintf("listening on %s with only loopback in trusted_proxies: if a proxy on another host (cloudflared, nginx) "+
+		"forwards to the tracker, add its address to trusted_proxies, or one person guessing passwords can block sign-in for everyone", c.Listen)
 }
 
 // HTTPS reports whether the tracker is served over HTTPS (public_url).
