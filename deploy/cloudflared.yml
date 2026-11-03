@@ -1,0 +1,19 @@
+# Cloudflare Tunnel for the PM tracker, for a tunnel managed from the command
+# line. A tunnel created in the Zero Trust dashboard needs no file: add a
+# public hostname there with service http://127.0.0.1:8080 instead.
+#
+#   cloudflared tunnel login
+#   cloudflared tunnel create pmtracker
+#   cloudflared tunnel route dns pmtracker pm.example.com
+#   install -m 0644 cloudflared.yml /etc/cloudflared/config.yml   # then fill in the UUID
+#   cloudflared service install
+#
+# The tracker listens on 127.0.0.1:8080 only ("listen" in config.json), so it
+# can't be reached except through the tunnel.
+tunnel: <TUNNEL-UUID>
+credentials-file: /etc/cloudflared/<TUNNEL-UUID>.json
+
+ingress:
+  - hostname: pm.example.com
+    service: http://127.0.0.1:8080
+  - service: http_status:404

@@ -534,3 +534,33 @@ func FuzzSafeNext(f *testing.F) {
 		}
 	})
 }
+
+// cloudflared on the same machine connects from loopback, which is trusted by
+// default. Cloudflare appends the visitor's address to X-Forwarded-For, so a
+// value the visitor sent themselves is ignored.
+func TestClientAddressViaCloudflared(t *testing.T) {
+	cfg, _ := config.Parse([]byte(`{"listen": "127.0.0.1:8080", "public_url": "https://pm.example.com"}`))
+	s := &Server{Cfg: cfg}
+	for _, c := range []struct{ remote, xff, want string }{
+		{"127.0.0.1:41000", "203.0.113.9", "203.0.113.9"},
+		{"[::1]:41000", "6.6.6.6, 203.0.113.9", "203.0.113.9"},
+		{"127.0.0.1:41000", "", "127.0.0.1"},
+	} {
+		r := httptest.NewRequest("POST", "/login", nil)
+		r.RemoteAddr = c.remote
+		if c.xff != "" {
+			r.Header.Set("X-Forwarded-For", c.xff)
+		}
+		if got := s.clientAddr(r); got != c.want {
+			t.Errorf("%s via %q = %s, want %s", c.remote, c.xff, got, c.want)
+		}
+	}
+	// Form posts arrive with the public origin; they must be accepted.
+	r := httptest.NewRequest("POST", "http://127.0.0.1:8080/login", nil)
+	r.Host = "127.0.0.1:8080" // in case the tunnel rewrites Host
+	r.Header.Set("Origin", "https://pm.example.com")
+	r.Header.Set("Sec-Fetch-Site", "same-origin")
+	if !s.sameOrigin(r) {
+		t.Error("a post from the public hostname should pass the origin check")
+	}
+}

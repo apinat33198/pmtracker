@@ -236,6 +236,26 @@ go version   # go1.26.x or go1.27.x
 CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o pmtracker ./cmd/pmtracker
 ```
 
+**Proxmox VM with Cloudflare Tunnel** (cloudflared on the same VM)
+
+1. In `config.json`: `"listen": "127.0.0.1:8080"` so nothing reaches the
+   tracker except through the tunnel, and `"public_url": "https://pm.example.com"`.
+   Leave `trusted_proxies` at its default: cloudflared connects from
+   loopback, and the lockout uses the visitor's address from Cloudflare.
+2. Install the binary and `deploy/pmtracker.service` as above, start it, and
+   copy the setup link: `journalctl -u pmtracker | grep setup`.
+3. Create the tunnel. In the Zero Trust dashboard: Networks, Tunnels, create a
+   cloudflared tunnel, run its install command on the VM, and add a public
+   hostname `pm.example.com` → `HTTP` `127.0.0.1:8080`. (Or from the command
+   line with `deploy/cloudflared.yml`.)
+4. Open the setup link on `https://pm.example.com/setup?token=…` and create
+   the first admin.
+5. Recommended: put a Cloudflare Access application on `pm.example.com`
+   (allow your company email domain, one-time PIN or Google login). That adds a
+   second check in front of the tracker's own sign-in. If you use the forecast
+   feed, add a second Access application for the path `forecast.ics` with a
+   **Bypass** policy, since Google Calendar fetches it without signing in.
+
 **Before going live**
 
 - HTTPS in front (Caddy, nginx or Cloudflare Tunnel), `public_url` set to the
