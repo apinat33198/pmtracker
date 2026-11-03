@@ -244,13 +244,23 @@ needs it; without it the service fails with `status=226/NAMESPACE`. The
 clock comes from the Proxmox host, so keep NTP running there. Proxmox backups
 of the container include the data file.
 
-**The quick way:** from your Mac, in this folder, run
-`deploy/install.sh root@<container IP> pm.example.com`. It sets up SSH key
-login (asks for the root password once), writes `config.json`, builds,
-installs the service, sets up the Cloudflare Tunnel (you approve one login
-link in the browser) and prints the link for creating the first admin. Put
-`service-account.json` here first if you have it; without it the tracker
-runs and syncs calendars once the key is added (run the script again).
+**The quick way, in the container** (as root):
+
+```sh
+apt install -y git
+git clone https://github.com/apinat33198/pmtracker && cd pmtracker
+deploy/install.sh pm.example.com
+```
+
+It installs a current Go if needed (checksum-verified), writes `config.json`,
+builds, installs the service, sets up the Cloudflare Tunnel (you approve one
+login link in a browser) and prints the link for creating the first admin.
+Put `service-account.json` in that folder first if you have it; without it
+the tracker runs and syncs calendars once the key is added. To update later:
+`git pull && deploy/install.sh pm.example.com`.
+
+From your Mac instead: `deploy/install.sh root@<container IP> pm.example.com`
+does the same over SSH (the Mac's key has to be on the container).
 
 The same by hand:
 
