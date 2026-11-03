@@ -207,6 +207,13 @@ fi
 install -d -m 0700 -o pmtracker -g pmtracker /var/lib/pmtracker
 install -m 0644 pmtracker.service /etc/systemd/system/pmtracker.service
 cd / && rm -rf /root/pmtracker-install
+# Keep a copy of the records from before this update, to roll back to if needed.
+data=$(sed -n 's/.*"data_file": *"\([^"]*\)".*/\1/p' /etc/pmtracker/config.json)
+data=${data:-/var/lib/pmtracker/data.json}
+if [ -f "$data" ]; then
+	cp -p "$data" "$data.before-update"
+	echo "Your records are kept; a copy from before this update is at $data.before-update"
+fi
 systemctl daemon-reload
 systemctl enable pmtracker >/dev/null 2>&1
 systemctl restart pmtracker
