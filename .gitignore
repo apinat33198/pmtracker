@@ -1,0 +1,7 @@
+/bin/
+/dist/
+/config.json
+*service-account*.json
+pmtracker-data.json
+pmtracker-demo.json
+.pmtracker-*.tmp

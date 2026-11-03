@@ -1,0 +1,41 @@
+{{define "content"}}{{$d := .Data}}{{$cat := .Cat}}{{$t := $d.Task}}
+{{template "adminnav" "sites"}}
+<p class="crumb"><a href="/admin/sites/{{$d.Site.ID}}">{{$d.Site.Code}} {{$d.Site.Name}}</a>{{if $d.Live}}<a href="/tasks/{{$t.ID}}">View task history</a>{{end}}</p>
+<section class="page-head">
+  <h1>{{$cat.SystemName $t.System}} at {{$d.Site.Code}}</h1>
+  <p class="lede">{{if $d.Live}}<span class="pill s-{{$d.Forecast.Status}}">{{$d.Forecast.Status.Label}}</span> {{with $d.Forecast.LastDone}}Last PM {{date .Date}}.{{else}}No PM on record.{{end}}{{if $d.Forecast.HasDue}} Next due {{date $d.Forecast.NextDue}}.{{end}}{{else if $t.Paused}}Paused.{{end}}</p>
+</section>
+
+<form class="panel" method="post" action="/admin/tasks/{{$t.ID}}">
+  <div class="grid-4">
+    <label class="stack">System <select name="system">{{range $cat.Systems}}<option value="{{.Key}}"{{if eq .Key $t.System}} selected{{end}}>{{.Name}}</option>{{end}}</select></label>
+    <div class="stack"><span class="label">Vendor</span>{{template "vendorSelect" (dict "Name" "vendor" "NewName" "new_vendor" "ID" "nv-edit" "Selected" $t.Vendor "Cat" $cat "Empty" "")}}<span class="field-hint">Changing vendor keeps the visit history</span></div>
+    <label class="stack">Every <span class="with-unit"><input name="interval_months" type="number" min="1" max="60" value="{{if $t.IntervalMonths}}{{$t.IntervalMonths}}{{else}}{{$.Cfg.Defaults.IntervalMonths}}{{end}}"> months</span></label>
+    <label class="stack">Cycle <select name="anchor_mode"><option value="rolling">From the last visit</option><option value="fixed"{{if eq $t.AnchorMode "fixed"}} selected{{end}}>Fixed contract slots</option></select></label>
+    <label class="stack">First slot date <input type="date" name="anchor_date" value="{{$t.AnchorDate}}"><span class="field-hint">Fixed slots: the first contract date. From last visit: the first due date when there's no history</span></label>
+    <label class="stack">Booking window <span class="with-unit">± <input name="window_days" type="number" min="1" max="120" value="{{if $t.WindowDays}}{{$t.WindowDays}}{{end}}" placeholder="{{$.Cfg.Defaults.WindowDays}}"> days</span></label>
+    <label class="stack">Remind <span class="with-unit"><input name="lead_days" type="number" min="1" max="180" value="{{if $t.LeadDays}}{{$t.LeadDays}}{{end}}" placeholder="{{$.Cfg.Defaults.LeadDays}}"> days before due</span></label>
+    <label class="stack">Overdue after <span class="with-unit"><input name="grace_days" type="number" min="1" max="120" value="{{if $t.GraceDays}}{{$t.GraceDays}}{{end}}" placeholder="{{$.Cfg.Defaults.GraceDays}}"> days</span></label>
+  </div>
+  <label class="stack">Notes <input name="notes" value="{{$t.Notes}}" placeholder="Contract number, equipment model"></label>
+  <label class="check-line"><input type="checkbox" name="paused"{{if $t.Paused}} checked{{end}}>Paused: no forecast or reminders (equipment out of service, contract ended)</label>
+  <button>Save task</button>
+</form>
+
+<h2>Set the last PM date</h2>
+<p class="hint">Records a completed visit on that date. Use it when the visit isn't on the calendar.</p>
+<form class="row-form" method="post" action="/visits/manual">
+  <input type="hidden" name="tasks" value="{{$t.ID}}">
+  <input type="hidden" name="back" value="{{.Back}}">
+  <label>Date <input type="date" name="date" max="{{iso $d.Today}}" required></label>
+  <label class="grow">Note <input name="note" value="Last PM date set by admin"></label>
+  <button>Record visit</button>
+</form>
+
+<h2>Delete</h2>
+<form class="danger" method="post" action="/admin/tasks/{{$t.ID}}/delete">
+  <p>Deleting the task removes visits recorded by hand for it. Calendar events stay and can be linked again. To keep the history, pause the task instead.</p>
+  <label class="check-line"><input type="checkbox" name="confirm" required>Delete {{$cat.TaskLabel $t.ID}}</label>
+  <button class="danger-button">Delete task</button>
+</form>
+{{end}}

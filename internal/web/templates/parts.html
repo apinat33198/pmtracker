@@ -1,0 +1,84 @@
+{{define "adminnav"}}
+<nav class="subnav" aria-label="Admin">
+  <a href="/admin/sites"{{if eq . "sites"}} aria-current="page"{{end}}>Sites and tasks</a>
+  <a href="/admin/vendors"{{if eq . "vendors"}} aria-current="page"{{end}}>Vendors</a>
+  <a href="/admin/systems"{{if eq . "systems"}} aria-current="page"{{end}}>Systems</a>
+  <a href="/admin/calendars"{{if eq . "calendars"}} aria-current="page"{{end}}>Calendars and sync</a>
+  <a href="/admin/import"{{if eq . "import"}} aria-current="page"{{end}}>Import and export</a>
+  <a href="/admin/activity"{{if eq . "activity"}} aria-current="page"{{end}}>Activity</a>
+</nav>
+{{end}}
+
+{{/* A table of visits. Expects dict "Visits", "Page" (the page data) and "ShowTasks". */}}
+{{define "visits"}}{{$p := .Page}}
+<table class="visits">
+  <thead><tr><th scope="col">Date</th><th scope="col">Status</th><th scope="col">From</th>{{if .ShowTasks}}<th scope="col">Covers</th>{{end}}<th scope="col"><span class="vh">Actions</span></th></tr></thead>
+  <tbody>
+  {{range .Visits}}
+    <tr>
+      <td data-label="Date"><span class="strong">{{date .Date}}</span>{{if .Event}}{{if not .Event.AllDay}}<span class="sub">{{.Event.Start.Format "15:04"}}</span>{{end}}{{end}}</td>
+      <td data-label="Status"><span class="vs vs-{{.Status}}">{{.Status.Label}}</span></td>
+      <td data-label="From">{{if .Event}}<span>{{.Event.Summary}}</span><span class="sub">{{calLabel $p.Cat .Event.CalendarID}}{{if eq .Method "manual"}}, linked by hand{{else if eq .Method "series"}}, series rule{{else if eq .Method "title"}}, title rule{{end}}</span>{{range .Reschedules}}<span class="sub change">{{if eq .Field "start"}}Moved from {{.Old}} to {{.New}}, seen {{dm .At}}{{else}}Cancelled by the organizer, seen {{dm .At}}{{end}}</span>{{end}}{{else}}<span>Recorded by hand</span>{{with .Note}}<span class="sub">{{.}}</span>{{end}}{{end}}</td>
+      {{if $.ShowTasks}}<td data-label="Covers">{{range $i, $t := .Tasks}}{{if $i}}, {{end}}<a href="/tasks/{{$t}}">{{taskLabel $p.Cat $t}}</a>{{end}}</td>{{end}}
+      <td class="actions">{{if $p.IsEditor}}
+        {{if eq .Status "done_unconfirmed"}}
+          <form method="post" action="/visits/mark"><input type="hidden" name="visit" value="{{.ID}}"><input type="hidden" name="status" value="done"><input type="hidden" name="back" value="{{$p.Back}}"><button>Confirm done</button></form>
+          <form method="post" action="/visits/mark"><input type="hidden" name="visit" value="{{.ID}}"><input type="hidden" name="status" value="missed"><input type="hidden" name="back" value="{{$p.Back}}"><button class="ghost">Mark missed</button></form>
+        {{else if eq .Source "manual"}}
+          <form method="post" action="/visits/manual/delete"><input type="hidden" name="id" value="{{.ManualID}}"><input type="hidden" name="back" value="{{$p.Back}}"><button class="ghost">Delete</button></form>
+        {{else if or (eq .Status "done") (eq .Status "missed")}}
+          <form method="post" action="/visits/unmark"><input type="hidden" name="visit" value="{{.ID}}"><input type="hidden" name="back" value="{{$p.Back}}"><button class="ghost">Undo</button></form>
+        {{end}}
+      {{end}}</td>
+    </tr>
+  {{else}}
+    <tr><td colspan="5" class="empty">No visits on record yet.</td></tr>
+  {{end}}
+  </tbody>
+</table>
+{{end}}
+
+{{define "cycle"}}{{if eq .AnchorMode "fixed"}}Every {{.IntervalMonths}} months, fixed slots from {{date .Anchor}}{{else}}Every {{.IntervalMonths}} months from the last visit{{end}}{{end}}
+
+{{/* Vendor dropdown with an "Add a new vendor" choice. Expects dict
+     "Name", "NewName", "ID", "Selected", "Cat", and "Empty" (label of a blank
+     first option; empty means a vendor is required). */}}
+{{define "vendorSelect"}}
+<span class="vendor-pick">
+  <select name="{{.Name}}" data-new-vendor="{{.ID}}" aria-label="Vendor"{{if not .Empty}} required{{end}}>
+    {{with .Empty}}<option value="">{{.}}</option>{{end}}
+    {{range .Cat.Vendors}}<option value="{{.Key}}"{{if eq .Key $.Selected}} selected{{end}}>{{.Name}}</option>{{end}}
+    <option value="{{newVendor}}">Add a new vendor…</option>
+  </select>
+  <span class="new-vendor" id="{{.ID}}"><input name="{{.NewName}}" placeholder="New vendor's name" autocomplete="off" aria-label="New vendor's name"></span>
+</span>
+{{end}}
+
+{{/* A site's vendors with contact details. Expects dict "Vendors", "Admin". */}}
+{{define "siteVendors"}}
+<ul class="vendor-cards">
+  {{range .Vendors}}
+  <li>
+    <span class="strong">{{if $.Admin}}<a href="/admin/vendors/{{.Vendor.Key}}">{{.Vendor.Name}}</a>{{else}}{{.Vendor.Name}}{{end}}</span>
+    <span class="sub">{{join .Systems ", "}}</span>
+    {{with .Vendor.Contact}}<span>{{.}}</span>{{end}}
+    {{with .Vendor.Phone}}<a href="tel:{{tel .}}">{{.}}</a>{{end}}
+    {{with .Vendor.Email}}<a href="mailto:{{.}}">{{.}}</a>{{end}}
+    {{if and (not .Vendor.Contact) (not .Vendor.Phone) (not .Vendor.Email)}}<span class="sub">No contact details yet{{if $.Admin}}; <a href="/admin/vendors/{{.Vendor.Key}}">add them</a>{{end}}.</span>{{end}}
+  </li>
+  {{end}}
+</ul>
+{{end}}
+
+{{/* Vendor detail fields. Expects dict "V" (a vendor, or nil for a new one). */}}
+{{define "vendorFields"}}{{$v := .V}}
+<div class="grid-4">
+  <label class="stack">Name <input name="name" value="{{with $v}}{{.Name}}{{end}}" required placeholder="ABC Power"></label>
+  <label class="stack">Contact person <input name="contact" value="{{with $v}}{{.Contact}}{{end}}" placeholder="Khun Nok"></label>
+  <label class="stack">Phone <input name="phone" type="tel" value="{{with $v}}{{.Phone}}{{end}}" placeholder="08 0000 0000"></label>
+  <label class="stack">Email <input name="email" type="email" value="{{with $v}}{{.Email}}{{end}}" placeholder="service@abcpower.co.th"></label>
+  <label class="stack span-2">Email domains <input name="domains" value="{{with $v}}{{join .Domains ", "}}{{end}}" placeholder="abcpower.co.th"><span class="field-hint">Calendar invites from these domains are linked to this vendor. The email's domain is added for you.</span></label>
+  <label class="stack span-2">Other names in event titles <input name="aliases" value="{{with $v}}{{join .Aliases ", "}}{{end}}" placeholder="ABC, เอบีซี"><span class="field-hint">Comma-separated</span></label>
+</div>
+<label class="stack">Notes <input name="notes" value="{{with $v}}{{.Notes}}{{end}}" placeholder="Contract number, after-hours line, escalation contact"></label>
+{{end}}

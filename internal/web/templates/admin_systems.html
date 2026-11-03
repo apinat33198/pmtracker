@@ -1,0 +1,29 @@
+{{define "content"}}{{$d := .Data}}
+{{template "adminnav" "systems"}}
+<section class="page-head">
+  <h1>Systems</h1>
+  <p class="lede">The kinds of equipment that get PM. Each becomes a column on the overview. Other names are what the matcher looks for in event titles, so keep them specific: a short word like "DC" can also mean "data centre" in your titles.</p>
+</section>
+
+<div class="edit-list">
+{{range $d.Systems}}
+  <form class="edit-row two" method="post" action="/admin/systems">
+    <input type="hidden" name="key" value="{{.Key}}">
+    <label class="stack">Name <input name="name" value="{{.Name}}" required></label>
+    <label class="stack">Other names in titles <input name="aliases" value="{{join .Aliases ", "}}"></label>
+    <div class="row-actions">
+      <span class="sub">{{index $d.Used .Key}} {{plural (index $d.Used .Key) "task" "tasks"}}</span>
+      <button>Save</button>
+      {{if not (index $d.Used .Key)}}<button class="ghost" formaction="/admin/systems/delete">Delete</button>{{end}}
+    </div>
+  </form>
+{{end}}
+</div>
+
+<h2>Add a system</h2>
+<form class="edit-row two panel" method="post" action="/admin/systems">
+  <label class="stack">Name <input name="name" required placeholder="Battery"></label>
+  <label class="stack">Other names in titles <input name="aliases" placeholder="Battery bank, แบตเตอรี่"></label>
+  <div class="row-actions"><button>Add system</button></div>
+</form>
+{{end}}

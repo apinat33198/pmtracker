@@ -1,0 +1,55 @@
+{{define "content"}}{{$d := .Data}}{{$cat := .Cat}}{{$v := $d.Vendor}}
+{{template "adminnav" "vendors"}}
+<p class="crumb"><a href="/admin/vendors">All vendors</a>{{if $d.Tasks}}<a href="/?vendor={{$v.Key}}">See its tasks on the overview</a>{{end}}</p>
+<section class="page-head">
+  <h1>{{$v.Name}}</h1>
+  <p class="lede">{{len $d.Tasks}} PM {{plural (len $d.Tasks) "task" "tasks"}}.{{with $v.Notes}} {{.}}{{end}}</p>
+</section>
+
+<h2>Details</h2>
+<form class="panel" method="post" action="/admin/vendors">
+  <input type="hidden" name="key" value="{{$v.Key}}">
+  {{template "vendorFields" (dict "V" $v)}}
+  <button>Save vendor</button>
+</form>
+
+<h2>PM tasks</h2>
+<table class="plain">
+  <thead><tr><th scope="col">Site</th><th scope="col">System</th><th scope="col">Last PM</th><th scope="col">Status</th><th scope="col"><span class="vh">Actions</span></th></tr></thead>
+  <tbody>
+  {{range $d.Tasks}}
+    <tr>
+      <td data-label="Site"><a href="/admin/sites/{{.Task.SiteID}}">{{$cat.SiteLabel .Task.SiteID}}</a></td>
+      <td data-label="System">{{$cat.SystemName .Task.System}}</td>
+      <td data-label="Last PM">{{if .Live}}{{with .Forecast.LastDone}}{{date .Date}}{{else}}<span class="sub">None</span>{{end}}{{else}}<span class="sub">–</span>{{end}}</td>
+      <td data-label="Status">{{if .Task.Paused}}<span class="tag">Paused</span>{{else if .Live}}<span class="pill s-{{.Forecast.Status}}">{{.Forecast.Status.Short}}</span>{{else}}<span class="sub">Site archived</span>{{end}}</td>
+      <td class="actions"><a class="button ghost" href="/admin/tasks/{{.Task.ID}}">Edit task</a></td>
+    </tr>
+  {{else}}
+    <tr><td colspan="5" class="empty">No PM tasks yet. Pick this vendor when adding a site or a task.</td></tr>
+  {{end}}
+  </tbody>
+</table>
+
+<h2>Change vendor or delete</h2>
+<div class="danger">
+  <form method="post" action="/admin/vendors/{{$v.Key}}/replace">
+    <p>Contract moved to another company? Move all {{len $d.Tasks}} PM {{plural (len $d.Tasks) "task" "tasks"}} of {{$v.Name}} to another vendor. Each task keeps its visit history.</p>
+    {{if $d.Tasks}}
+    <div class="stack"><span class="label">Move tasks to</span>{{template "vendorSelect" (dict "Name" "to" "NewName" "new_vendor" "ID" "nv-replace" "Selected" "" "Cat" (dict "Vendors" $d.Others) "Empty" "Choose a vendor")}}</div>
+    <label class="check-line"><input type="checkbox" name="delete_after">Then delete {{$v.Name}}</label>
+    <button class="ghost">Move tasks</button>
+    {{else}}<p class="sub">Nothing to move.</p>{{end}}
+  </form>
+  <form method="post" action="/admin/vendors/delete">
+    <input type="hidden" name="key" value="{{$v.Key}}">
+    {{if $d.Tasks}}
+    <p>{{$v.Name}} can't be deleted while it has PM tasks. Move them to another vendor first, or delete the tasks.</p>
+    <button class="danger-button" disabled>Delete vendor</button>
+    {{else}}
+    <p>Remove {{$v.Name}} from the vendor list. Past visits linked to its old tasks are unaffected.</p>
+    <button class="danger-button">Delete vendor</button>
+    {{end}}
+  </form>
+</div>
+{{end}}

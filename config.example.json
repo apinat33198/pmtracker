@@ -1,0 +1,37 @@
+{
+  "timezone": "Asia/Bangkok",
+  "listen": ":8080",
+  "public_url": "https://pm.example.com",
+  "data_file": "/var/lib/pmtracker/data.json",
+  "sync_interval_minutes": 15,
+  "sync_lookback_months": 24,
+
+  "google": {
+    "credentials_file": "/etc/pmtracker/service-account.json"
+  },
+
+  "defaults": {
+    "interval_months": 3,
+    "window_days": 21,
+    "lead_days": 30,
+    "grace_days": 7
+  },
+
+  "calendars": [
+    {"id": "c_0123456789abcdef@group.calendar.google.com", "label": "PM – Vendors", "pm_only": true}
+  ],
+
+  "keywords": ["MA visit"],
+  "holidays": [],
+
+  "feed": {"token": "replace-with-a-long-random-string"},
+  "digest": {"time": "08:00", "telegram_bot_token": "", "telegram_chat_id": ""},
+
+  "auth": {
+    "users": [
+      {"username": "admin", "password": "change-me", "role": "admin"},
+      {"username": "facilities", "password": "change-me-too", "role": "editor"},
+      {"username": "manager", "password": "and-me", "role": "viewer"}
+    ]
+  }
+}

@@ -1,0 +1,52 @@
+{{define "layout"}}<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{.Title}} – PM Tracker</title>
+<link rel="stylesheet" href="/static/style.css">
+<link rel="icon" href="/static/icon.svg" type="image/svg+xml">
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="/"><svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><rect x="3" y="2" width="16" height="18" rx="3" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="11" cy="6.5" r="1.6" fill="currentColor"/><path d="M7 12h8M7 15.5h5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>PM Tracker</a>
+  <nav class="nav" aria-label="Main">
+    <a href="/"{{if eq .Nav "overview"}} aria-current="page"{{end}}>Overview</a>
+    <a href="/inbox"{{if eq .Nav "inbox"}} aria-current="page"{{end}}>Review inbox{{with len .Snap.Inbox}} <span class="count">{{.}}</span>{{end}}</a>
+    <a href="/events"{{if eq .Nav "events"}} aria-current="page"{{end}}>Events</a>
+    {{if .IsAdmin}}<a href="/admin/sites"{{if eq .Nav "admin"}} aria-current="page"{{end}}>Admin</a>{{end}}
+  </nav>
+  <div class="top-right">
+    <span class="sync-state" title="{{if not .LastSync.IsZero}}{{dateTime .LastSync}}{{end}}">Synced {{ago .LastSync}}</span>
+    {{if .IsEditor}}<form method="post" action="/sync"><input type="hidden" name="back" value="{{.Back}}"><button type="submit" class="ghost">Sync now</button></form>{{end}}
+    {{if not .OpenAccess}}<span class="who" title="Signed in as {{.User.Name}}">{{.User.Name}}, {{.User.Role}}</span>{{end}}
+  </div>
+</header>
+{{if .Demo}}<p class="demo-bar">Demo data: 21 sites with events generated around today. Changes you make are saved to the demo data file.</p>{{else if .OpenAccess}}<p class="demo-bar warn-bar">No users are configured, so anyone who can reach this page is an admin. Add users under auth in the config file, or put the tracker behind an access proxy.</p>{{end}}
+<div class="flashes">
+{{range .SyncErrors}}<p class="flash error" role="alert">Calendar sync is failing. {{.}}</p>{{end}}
+{{with .Msg}}<p class="flash {{$.MsgKind}}" role="status">{{.}}</p>{{end}}
+</div>
+<main>
+{{template "content" .}}
+</main>
+<script>
+// Show the "new vendor's name" box only when "Add a new vendor" is picked.
+(function () {
+  function sync(sel) {
+    var box = document.getElementById(sel.dataset.newVendor);
+    if (!box) return;
+    var on = sel.value === "__new__";
+    box.hidden = !on;
+    box.querySelector("input").required = on;
+    return on && box;
+  }
+  document.querySelectorAll("select[data-new-vendor]").forEach(sync);
+  document.addEventListener("change", function (e) {
+    var sel = e.target.closest && e.target.closest("select[data-new-vendor]");
+    if (sel) { var box = sync(sel); if (box) box.querySelector("input").focus(); }
+  });
+})();
+</script>
+</body>
+</html>{{end}}

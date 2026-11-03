@@ -1,0 +1,40 @@
+{{define "content"}}{{$d := .Data}}
+{{template "adminnav" "import"}}
+<section class="page-head">
+  <h1>Import and export</h1>
+  <p class="lede">Set up many sites at once from a spreadsheet. Each row is one PM task: a system at a site and its vendor. Missing sites, systems and vendors are created; existing tasks get their cycle updated; a last PM date is recorded if it's newer than what's on record.</p>
+</section>
+
+<div class="two-col">
+  <section>
+    <h2>Columns</h2>
+    <p class="hint"><code>site_code</code>, <code>system</code> and <code>vendor</code> are required. Optional: <code>site_name</code>, <code>region</code>, <code>interval_months</code>, <code>last_pm_date</code>, <code>anchor_mode</code> (rolling or fixed), <code>anchor_date</code>, <code>notes</code>. Dates can be 2026-09-14, 14/09/2026 or 14/09/2569.</p>
+    <p><a class="button ghost" href="/admin/import/template.csv">Download a template</a></p>
+  </section>
+  <section>
+    <h2>Export</h2>
+    <p class="hint">The current status of every task, with last PM and next due dates. Its first columns match the import format, so you can edit it in a spreadsheet and import it back.</p>
+    <p><a class="button ghost" href="/export.csv">Export status CSV</a></p>
+  </section>
+</div>
+
+<h2>Import</h2>
+<form class="panel" method="post" action="/admin/import" enctype="multipart/form-data">
+  <label class="stack">CSV file <input type="file" name="file" accept=".csv,text/csv"></label>
+  <label class="stack">Or paste rows <textarea name="csv" rows="8" spellcheck="false" placeholder="site_code,site_name,region,system,vendor,interval_months,last_pm_date">{{$d.Text}}</textarea></label>
+  <div class="buttons">
+    <button name="mode" value="check" class="ghost">Check without saving</button>
+    <button name="mode" value="apply">Import</button>
+  </div>
+</form>
+
+{{with $d.Error}}<p class="flash error" role="alert">{{.}}</p>{{end}}
+{{with $d.Result}}
+<h2>{{if $d.Applied}}Imported{{else}}Check result{{end}}</h2>
+<p class="{{if $d.Applied}}flash{{else}}note{{end}}">{{if not $d.Applied}}Nothing was saved yet. {{end}}{{.SitesCreated}} new {{plural .SitesCreated "site" "sites"}}, {{.VendorsCreated}} new {{plural .VendorsCreated "vendor" "vendors"}}, {{.SystemsCreated}} new {{plural .SystemsCreated "system" "systems"}}, {{.TasksCreated}} new {{plural .TasksCreated "task" "tasks"}}, {{.TasksUpdated}} updated, {{.VisitsAdded}} last PM {{plural .VisitsAdded "date" "dates"}}.{{if .Errors}} {{.Errors}} {{plural .Errors "row was" "rows were"}} skipped.{{end}}</p>
+<table class="plain compact">
+  <thead><tr><th scope="col">Line</th><th scope="col">Result</th></tr></thead>
+  <tbody>{{range .Lines}}<tr><td data-label="Line">{{.Line}}</td><td data-label="Result">{{if .OK}}{{.Message}}{{else}}<span class="late">Skipped: {{.Message}}</span>{{end}}</td></tr>{{end}}</tbody>
+</table>
+{{end}}
+{{end}}

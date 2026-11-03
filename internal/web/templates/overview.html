@@ -1,0 +1,90 @@
+{{define "content"}}{{$d := .Data}}{{$cat := .Cat}}
+<section class="page-head with-tools">
+  <div>
+    <h1>PM across {{len .Snap.Sites}} sites</h1>
+    <p class="lede">{{$d.Total}} PM tasks as of {{date .Snap.Today}}. Each cell is the next PM for one system at one site; open it for the full history.</p>
+  </div>
+  <a class="button ghost" href="/export.csv">Export CSV</a>
+</section>
+
+<form class="filters" method="get" action="/">
+  <label>Region <select name="region"><option value="">All regions</option>{{range $d.Regions}}<option{{if eq . $d.Region}} selected{{end}}>{{.}}</option>{{end}}</select></label>
+  <label>System <select name="system"><option value="">All systems</option>{{range .Snap.Systems}}<option value="{{.Key}}"{{if eq .Key $d.System}} selected{{end}}>{{.Name}}</option>{{end}}</select></label>
+  <label>Vendor <select name="vendor"><option value="">All vendors</option>{{range $cat.Vendors}}<option value="{{.Key}}"{{if eq .Key $d.Vendor}} selected{{end}}>{{.Name}}</option>{{end}}</select></label>
+  {{with $d.Status}}<input type="hidden" name="status" value="{{.}}">{{end}}
+  <button class="ghost">Apply</button>
+  {{if $d.Filtered}}<a href="/">Clear filters</a>{{end}}
+</form>
+
+<nav class="chips" aria-label="Filter by status">
+  {{range $d.Chips}}<a class="chip s-{{.Status}}{{if .Active}} on{{end}}" href="{{.Href}}"><i class="dot"></i>{{.Status.Label}} <b>{{.Count}}</b></a>
+  {{end}}
+</nav>
+{{if .Snap.Unconfirmed}}<p class="note">{{.Snap.Unconfirmed}} past {{plural .Snap.Unconfirmed "visit is" "visits are"}} waiting for someone to confirm it happened. Open a site to confirm or mark them missed.</p>{{end}}
+
+<div class="matrix-wrap">
+<table class="matrix">
+  <thead>
+    <tr><th scope="col" class="m-site">Site</th><th scope="col" class="m-last">Last PM</th>{{range $d.Systems}}<th scope="col">{{.Name}}</th>{{end}}</tr>
+  </thead>
+  <tbody>
+  {{$region := "-"}}
+  {{range $d.Sites}}{{$ss := .}}
+    {{if ne .Site.Region $region}}{{$region = .Site.Region}}<tr class="region"><th colspan="{{add (len $d.Systems) 2}}" scope="colgroup">{{if .Site.Region}}{{.Site.Region}}{{else}}No region{{end}}</th></tr>{{end}}
+    <tr>
+      <th scope="row" class="m-site"><a href="/sites/{{.Site.ID}}"><i class="dot s-{{.Worst}}" title="{{.Worst.Label}}"></i><b>{{.Site.Code}}</b><span>{{.Site.Name}}</span></a></th>
+      <td class="m-last">{{if .LastPM.IsZero}}<span class="sub">None</span>{{else}}{{dm .LastPM}}<span class="sub">{{sinceDays .LastPM}} days ago</span>{{end}}</td>
+      {{range $d.Systems}}{{$cell := index $ss.Cells .Key}}
+      <td class="m-cell">{{range $cell}}
+        <a class="cell s-{{.Status}}{{if and $d.Status (ne (print .Status) $d.Status)}} dim{{end}}" href="/tasks/{{.Task.ID}}" title="{{$cat.VendorName .Task.Vendor}}: {{.Status.Label}}{{if .HasDue}}, due {{date .NextDue}}{{end}}{{with .Booked}}, booked {{date .Date}}{{end}}">
+          <span class="cell-date">{{if .Booked}}{{dm .Booked.Date}}{{else if .HasDue}}{{dm .NextDue}}{{else}}No date{{end}}</span>
+          <span class="cell-note">{{if eq .Status "booked"}}Booked{{else if eq .Status "off_cycle"}}Booked, off-cycle{{else if eq .Status "no_history"}}No history{{else}}{{dueShort .DaysLeft}}{{end}}{{if gt (len $cell) 1}}, {{$cat.VendorName .Task.Vendor}}{{end}}</span>
+        </a>{{else}}<span class="none" aria-label="No task">–</span>{{end}}
+      </td>{{end}}
+    </tr>
+  {{else}}
+    <tr><td colspan="{{add (len $d.Systems) 2}}" class="empty">No sites match these filters. <a href="/">Clear filters</a></td></tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+<p class="legend-line">Cells show the booked date when a visit is booked, otherwise the due date. Colour is the task's status; the dot beside a site is its most urgent task.</p>
+
+<div class="two-col">
+  <section>
+    <h2>Overdue and the next 30 days</h2>
+    <table class="plain upcoming">
+      <thead><tr><th scope="col">Date</th><th scope="col">Site</th><th scope="col">Task</th><th scope="col">Status</th></tr></thead>
+      <tbody>
+      {{range $d.Upcoming}}
+        <tr>
+          <td data-label="Date"><span class="strong">{{dateShort .ActionDate}}</span>{{if .Booked}}<span class="sub">booked</span>{{else}}<span class="sub{{if lt .DaysLeft 0}} late{{end}}">{{dueRel .DaysLeft}}</span>{{end}}</td>
+          <td data-label="Site"><a href="/sites/{{.Site.ID}}">{{.Site.Code}}</a><span class="sub">{{.Site.Name}}</span></td>
+          <td data-label="Task"><a href="/tasks/{{.Task.ID}}">{{$cat.SystemName .Task.System}}</a><span class="sub">{{$cat.VendorName .Task.Vendor}}</span></td>
+          <td data-label="Status"><span class="pill s-{{.Status}}">{{.Status.Short}}</span></td>
+        </tr>
+      {{else}}
+        <tr><td colspan="4" class="empty">Nothing due or booked in the next 30 days.</td></tr>
+      {{end}}
+      </tbody>
+    </table>
+  </section>
+  <section>
+    <h2>By vendor</h2>
+    <table class="plain vendors">
+      <thead><tr><th scope="col">Vendor</th><th scope="col" class="num">Sites</th><th scope="col" class="num">Overdue</th><th scope="col" class="num">Due soon</th><th scope="col" class="num">Off-cycle</th></tr></thead>
+      <tbody>
+      {{range $d.Vendors}}
+        <tr>
+          <td data-label="Vendor"><a href="/?vendor={{.Vendor.Key}}">{{.Vendor.Name}}</a><span class="sub">{{.Tasks}} {{plural .Tasks "task" "tasks"}}{{with .Vendor.Contact}}, {{.}}{{end}}{{with .Vendor.Phone}}, <a href="tel:{{tel .}}">{{.}}</a>{{end}}</span></td>
+          <td data-label="Sites" class="num">{{.Sites}}</td>
+          <td data-label="Overdue" class="num">{{with count .Counts "overdue"}}<span class="n s-overdue">{{.}}</span>{{else}}<span class="zero">0</span>{{end}}</td>
+          <td data-label="Due soon" class="num">{{with count .Counts "due_soon"}}<span class="n s-due_soon">{{.}}</span>{{else}}<span class="zero">0</span>{{end}}</td>
+          <td data-label="Off-cycle" class="num">{{with count .Counts "off_cycle"}}<span class="n s-off_cycle">{{.}}</span>{{else}}<span class="zero">0</span>{{end}}</td>
+        </tr>
+      {{end}}
+      </tbody>
+    </table>
+  </section>
+</div>
+{{end}}

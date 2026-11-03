@@ -1,0 +1,54 @@
+{{define "content"}}{{$cat := .Cat}}
+<section class="page-head">
+  <h1>Review inbox</h1>
+  <p class="lede">Events that look like a vendor PM visit but couldn't be tied to a site's PM task on their own. Link each one once; save a rule so the next ones match automatically.</p>
+</section>
+
+{{range .Snap.Inbox}}{{$ev := .Event}}{{$m := .Match}}
+<article class="review">
+  <div class="review-when">
+    <span class="strong">{{dateShort $ev.Start}}</span>
+    <span class="sub">{{fromToday $ev.Start}}</span>
+    {{if .Siblings}}<span class="series">Recurring, {{.Siblings}} more {{plural .Siblings "occurrence" "occurrences"}}</span>{{end}}
+  </div>
+  <div class="review-what">
+    <h2>{{$ev.Summary}}</h2>
+    <p class="sub">{{calLabel $cat $ev.CalendarID}}{{with $ev.Organizer}}, organised by {{.}}{{end}}{{with $ev.Location}}, at {{.}}{{end}}{{with $ev.Attendees}}, with {{join . ", "}}{{end}}</p>
+    <ul class="why">
+      {{range $m.Reasons}}<li class="yes">{{.}}</li>{{end}}
+      {{range $m.Missing}}<li class="no">{{.}}</li>{{end}}
+    </ul>
+  </div>
+  {{if $.IsEditor}}
+  <form class="decide" method="post" action="/inbox/link">
+    <input type="hidden" name="event" value="{{$ev.Key}}">
+    {{with $m.Candidates}}
+    <fieldset>
+      <legend>Likely tasks</legend>
+      <div class="checks one">{{range .}}<label><input type="checkbox" name="tasks" value="{{.}}"{{if eq (len $m.Candidates) 1}} checked{{end}}>{{taskLabel $cat .}}</label>{{end}}</div>
+    </fieldset>
+    {{end}}
+    <label class="stack">{{if $m.Candidates}}Or another task{{else}}PM task{{end}}
+      <select name="other">
+        <option value="">Choose a site and system</option>
+        {{range $s := $cat.Sites}}{{if not $s.Archived}}<optgroup label="{{$s.Code}} {{$s.Name}}">{{range $cat.TasksAt $s.ID}}{{if not .Paused}}<option value="{{.ID}}">{{$s.Code}} {{$cat.SystemName .System}} ({{$cat.VendorName .Vendor}})</option>{{end}}{{end}}</optgroup>{{end}}{{end}}
+      </select>
+    </label>
+    <fieldset>
+      <legend>Apply to</legend>
+      <label><input type="radio" name="remember" value=""{{if not $ev.RecurringEventID}} checked{{end}}>This event only</label>
+      {{if $ev.RecurringEventID}}<label><input type="radio" name="remember" value="series" checked>Every event in this recurring series</label>{{end}}
+      <label><input type="radio" name="remember" value="title">Every event titled “{{$ev.Summary}}”</label>
+    </fieldset>
+    <div class="buttons">
+      <button type="submit">Link visit</button>
+      <button type="submit" class="ghost" formaction="/inbox/ignore" formnovalidate>Not a PM visit</button>
+    </div>
+    {{if and $.IsAdmin (not $m.Site)}}<p class="hint small">Site missing from the list? <a href="/admin/sites">Add it</a>, or add the code from this title to an existing site's aliases.</p>{{end}}
+  </form>
+  {{end}}
+</article>
+{{else}}
+<p class="empty-state">Nothing to review. Every event that looks like PM is linked to a task or marked as not PM.</p>
+{{end}}
+{{end}}

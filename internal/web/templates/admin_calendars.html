@@ -1,0 +1,63 @@
+{{define "content"}}{{$d := .Data}}{{$cat := .Cat}}
+{{template "adminnav" "calendars"}}
+<section class="page-head">
+  <h1>Calendars and sync</h1>
+  <p class="lede">Google calendars the tracker reads every {{.Cfg.SyncIntervalMinutes}} minutes.{{with $d.ServiceAccount}} Share each one with <code>{{.}}</code> and give it “See all event details”.{{end}}</p>
+</section>
+
+<div class="edit-list">
+{{range $d.Rows}}{{$row := .}}
+  <form class="edit-row cal" method="post" action="/admin/calendars">
+    <input type="hidden" name="id" value="{{.Cal.ID}}">
+    <input type="hidden" name="existing" value="1">
+    <div class="stack"><span class="strong">{{.Cal.Label}}</span><code class="sub">{{.Cal.ID}}</code>
+      <span class="sub">{{if and .State.LastError (.State.LastErrorAt.After .State.LastSyncedAt)}}<span class="late">{{.State.LastError}}</span>{{else}}Synced {{ago .State.LastSyncedAt}}{{if .State.SyncToken}}, incremental{{else}}, full sync next{{end}}{{end}}</span></div>
+    <label class="stack">Label <input name="label" value="{{.Cal.Label}}"></label>
+    <label class="stack">Belongs to site <select name="site"><option value="">Any site (from the title)</option>{{range $cat.Sites}}<option value="{{.ID}}"{{if eq .ID $row.Cal.SiteID}} selected{{end}}>{{.Code}} {{.Name}}</option>{{end}}</select></label>
+    <label class="check-line"><input type="checkbox" name="pm_only"{{if .Cal.PMOnly}} checked{{end}}>Every event is a PM visit</label>
+    <div class="row-actions">
+      <button>Save</button>
+      <button class="ghost" formaction="/admin/calendars/delete">Stop tracking</button>
+    </div>
+  </form>
+{{else}}
+  <p class="empty-state">No calendars yet. Add one below.</p>
+{{end}}
+</div>
+
+<h2>Add a calendar</h2>
+<form class="edit-row cal panel" method="post" action="/admin/calendars">
+  <label class="stack">Calendar ID <input name="id" required placeholder="c_…@group.calendar.google.com"><span class="field-hint">Google Calendar, Settings and sharing, Integrate calendar</span></label>
+  <label class="stack">Label <input name="label" placeholder="PM – Vendors"></label>
+  <label class="stack">Belongs to site <select name="site"><option value="">Any site (from the title)</option>{{range $cat.Sites}}<option value="{{.ID}}">{{.Code}} {{.Name}}</option>{{end}}</select></label>
+  <label class="check-line"><input type="checkbox" name="pm_only">Every event is a PM visit</label>
+  <div class="row-actions"><button>Add calendar</button></div>
+</form>
+
+<h2>Learned rules</h2>
+{{if $d.Rules}}
+<table class="plain">
+  <thead><tr><th scope="col">Rule</th><th scope="col">Matches</th><th scope="col">Links to</th><th scope="col"><span class="vh">Actions</span></th></tr></thead>
+  <tbody>
+  {{range $d.Rules}}
+    <tr>
+      <td data-label="Rule">#{{.ID}}<span class="sub">{{with .By}}{{.}}, {{end}}{{date .Created}}</span></td>
+      <td data-label="Matches">{{if eq .Kind "series"}}Every event in the recurring series “{{.Label}}”{{else}}Every event titled “{{.Label}}”{{end}}</td>
+      <td data-label="Links to">{{range $i, $t := .Tasks}}{{if $i}}, {{end}}{{taskLabel $cat $t}}{{end}}</td>
+      <td class="actions"><form method="post" action="/admin/rules/delete"><input type="hidden" name="id" value="{{.ID}}"><button class="ghost">Delete rule</button></form></td>
+    </tr>
+  {{end}}
+  </tbody>
+</table>
+{{else}}<p class="hint">None yet. They're saved from the review inbox when a link should apply to a series or a title.</p>{{end}}
+
+<h2>Forecast feed</h2>
+{{with $d.FeedURL}}
+<p class="hint">Subscribe in Google Calendar under Other calendars, From URL. It holds each task's next due date and three projected cycles. Google refreshes subscribed feeds on its own schedule, often hours apart.</p>
+<p><code class="copy">{{.}}</code></p>
+{{else}}<p class="hint">Off. Set <code>feed.token</code> in the config file to publish it.</p>{{end}}
+
+<h2>Daily digest</h2>
+<p class="hint">{{if .Cfg.Digest.Time}}Sent at {{.Cfg.Digest.Time}}{{if $d.Telegram}} to Telegram{{else}}, logged only (no Telegram chat configured){{end}}.{{else}}Off. Set <code>digest.time</code> in the config file to send it daily.{{end}} Today's would read:</p>
+<pre class="digest">{{if $d.Digest}}{{$d.Digest}}{{else}}Nothing needs attention today.{{end}}</pre>
+{{end}}

@@ -1,0 +1,43 @@
+{{define "content"}}{{$d := .Data}}{{$f := $d.F}}{{$cat := .Cat}}
+<p class="crumb"><a href="/">Overview</a><a href="/sites/{{$f.Site.ID}}">{{$f.Site.Code}} {{$f.Site.Name}}</a>{{if .IsAdmin}}<a href="/admin/tasks/{{$f.Task.ID}}">Edit task</a>{{end}}</p>
+<section class="asset-head">
+  <div>
+    <p class="code">{{$f.Site.Code}}</p>
+    <h1>{{$cat.SystemName $f.Task.System}} at {{$f.Site.Name}}</h1>
+    <p class="lede">Serviced by {{if $.IsAdmin}}<a href="/admin/vendors/{{$d.Vendor.Key}}">{{$d.Vendor.Name}}</a>{{else}}{{$d.Vendor.Name}}{{end}}{{with $d.Vendor.Contact}}, {{.}}{{end}}{{with $d.Vendor.Phone}}, <a href="tel:{{tel .}}">{{.}}</a>{{end}}{{with $d.Vendor.Email}}, <a href="mailto:{{.}}">{{.}}</a>{{end}}.{{with $f.Task.Notes}} {{.}}{{end}}</p>
+  </div>
+  <div class="verdict s-{{$f.Status}}">
+    <span class="pill s-{{$f.Status}}">{{$f.Status.Label}}</span>
+    <p>{{$f.Status.Hint}}</p>
+  </div>
+</section>
+
+<dl class="facts">
+  <div><dt>Last PM</dt><dd>{{with $f.LastDone}}{{date .Date}}<span class="sub">{{.Status.Label}}</span>{{else}}None on record{{end}}</dd></div>
+  <div><dt>Next due</dt><dd>{{if $f.HasDue}}{{date $f.NextDue}}<span class="sub{{if lt $f.DaysLeft 0}} late{{end}}">{{dueRel $f.DaysLeft}}</span>{{else}}Unknown<span class="sub">Set the last PM date</span>{{end}}</dd></div>
+  <div><dt>Booking window</dt><dd>{{if $f.HasDue}}{{dateShort $f.WindowStart}} to {{dateShort $f.WindowEnd}}<span class="sub">{{$f.Policy.WindowDays}} days either side</span>{{else}}–{{end}}</dd></div>
+  <div><dt>Booked</dt><dd>{{with $f.Booked}}{{date .Date}}<span class="sub">{{offset $f.BookedOffset}}</span>{{else}}Not booked{{end}}</dd></div>
+  <div><dt>Cycle</dt><dd>Every {{$f.Policy.IntervalMonths}} months<span class="sub">{{if eq $f.Policy.AnchorMode "fixed"}}Fixed contract slots from {{date $f.Policy.Anchor}}{{else}}Counted from the last visit{{end}}</span></dd></div>
+</dl>
+{{if not $f.SuggestedBooking.IsZero}}<p class="note">The due date falls on a weekend or holiday. Suggest {{date $f.SuggestedBooking}} to the vendor.</p>{{end}}
+
+<figure class="big-ribbon">
+  {{bigRibbon $f}}
+  <figcaption>Twelve months back and twelve ahead. Hover a mark for its date.{{with $f.Projections}} Projected: {{range $i, $p := .}}{{if $i}}, {{end}}{{dateShort $p}}{{end}}.{{end}}</figcaption>
+</figure>
+
+<h2>Visits</h2>
+{{template "visits" (dict "Visits" $f.Visits "Page" . "ShowTasks" false)}}
+
+{{if .IsEditor}}
+<h2>Record a past visit</h2>
+<p class="hint">For history from paper records or a visit that wasn't on the calendar.</p>
+<form class="row-form" method="post" action="/visits/manual">
+  <input type="hidden" name="tasks" value="{{$f.Task.ID}}">
+  <input type="hidden" name="back" value="{{.Back}}">
+  <label>Date <input type="date" name="date" max="{{iso $d.Today}}" required></label>
+  <label class="grow">Note <input name="note" placeholder="Service report number or technician"></label>
+  <button>Record visit</button>
+</form>
+{{end}}
+{{end}}

@@ -1,0 +1,31 @@
+# systemd unit for a Proxmox LXC or any Linux host.
+#
+#   useradd --system --home /var/lib/pmtracker --shell /usr/sbin/nologin pmtracker
+#   install -m 0755 pmtracker-linux-amd64 /usr/local/bin/pmtracker
+#   install -d -m 0750 -o root -g pmtracker /etc/pmtracker
+#   install -m 0640 -o root -g pmtracker config.json service-account.json /etc/pmtracker/
+#   cp pmtracker.service /etc/systemd/system/ && systemctl daemon-reload
+#   sudo -u pmtracker pmtracker -config /etc/pmtracker/config.json check
+#   systemctl enable --now pmtracker
+
+[Unit]
+Description=PM Tracker (vendor preventive maintenance from Google Calendar)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=pmtracker
+Group=pmtracker
+ExecStart=/usr/local/bin/pmtracker -config /etc/pmtracker/config.json
+StateDirectory=pmtracker
+Restart=on-failure
+RestartSec=5
+
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/pmtracker
+
+[Install]
+WantedBy=multi-user.target

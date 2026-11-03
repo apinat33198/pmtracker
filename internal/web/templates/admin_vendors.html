@@ -1,0 +1,33 @@
+{{define "content"}}{{$rows := .Data}}
+{{template "adminnav" "vendors"}}
+<section class="page-head with-tools">
+  <div>
+    <h1>Vendors</h1>
+    <p class="lede">{{len $rows}} {{plural (len $rows) "vendor" "vendors"}}. Every vendor here appears in the vendor list when you add a site or a PM task. Open one to edit its details, see its sites, move its tasks to another vendor, or delete it.</p>
+  </div>
+  <a class="button" href="#add">Add a vendor</a>
+</section>
+
+<table class="plain vendor-list">
+  <thead><tr><th scope="col">Vendor</th><th scope="col">Contact</th><th scope="col">Services</th><th scope="col">Needs attention</th><th scope="col"><span class="vh">Actions</span></th></tr></thead>
+  <tbody>
+  {{range $rows}}
+    <tr>
+      <td data-label="Vendor"><a class="strong" href="/admin/vendors/{{.Vendor.Key}}">{{.Vendor.Name}}</a>{{with .Vendor.Domains}}<span class="sub">{{join . ", "}}</span>{{else}}<span class="sub warn">No email domain</span>{{end}}</td>
+      <td data-label="Contact">{{with .Vendor.Contact}}<span>{{.}}</span>{{end}}{{with .Vendor.Phone}}<span class="sub"><a href="tel:{{tel .}}">{{.}}</a></span>{{end}}{{with .Vendor.Email}}<span class="sub"><a href="mailto:{{.}}">{{.}}</a></span>{{end}}{{if and (not .Vendor.Contact) (not .Vendor.Phone) (not .Vendor.Email)}}<span class="sub">None yet</span>{{end}}</td>
+      <td data-label="Services">{{if .Tasks}}{{join .Services ", "}}<span class="sub">{{range $i, $s := .Sites}}{{if $i}}, {{end}}{{$s.Code}}{{end}}</span>{{else}}<span class="sub">No PM tasks</span>{{end}}</td>
+      <td data-label="Needs attention">{{$o := count .Counts "overdue"}}{{$ds := count .Counts "due_soon"}}{{$oc := count .Counts "off_cycle"}}{{if $o}}<span class="attn"><span class="n s-overdue">{{$o}}</span> overdue</span>{{end}}{{if $ds}}<span class="attn"><span class="n s-due_soon">{{$ds}}</span> due soon</span>{{end}}{{if $oc}}<span class="attn"><span class="n s-off_cycle">{{$oc}}</span> off-cycle</span>{{end}}{{if not (or $o $ds $oc)}}<span class="zero">Nothing</span>{{end}}</td>
+      <td class="actions"><a class="button ghost" href="/admin/vendors/{{.Vendor.Key}}">Edit</a></td>
+    </tr>
+  {{else}}
+    <tr><td colspan="5" class="empty">No vendors yet. Add the first one below.</td></tr>
+  {{end}}
+  </tbody>
+</table>
+
+<h2 id="add">Add a vendor</h2>
+<form class="panel" method="post" action="/admin/vendors">
+  {{template "vendorFields" (dict "V" nil)}}
+  <button>Add vendor</button>
+</form>
+{{end}}

@@ -1,0 +1,59 @@
+{{define "content"}}{{$d := .Data}}{{$cat := .Cat}}
+{{template "adminnav" "sites"}}
+<section class="page-head">
+  <h1>Sites and PM tasks</h1>
+  <p class="lede">{{len $d.Rows}} active {{plural (len $d.Rows) "site" "sites"}}. Open a site to rename it, add or change its PM tasks, set last PM dates, archive or delete it.</p>
+</section>
+
+<table class="plain">
+  <thead><tr><th scope="col">Code</th><th scope="col">Name</th><th scope="col">Region</th><th scope="col" class="num">Tasks</th><th scope="col">Most urgent</th><th scope="col"><span class="vh">Actions</span></th></tr></thead>
+  <tbody>
+  {{range $d.Rows}}
+    <tr>
+      <td data-label="Code"><a class="strong" href="/admin/sites/{{.Site.ID}}">{{.Site.Code}}</a></td>
+      <td data-label="Name">{{.Site.Name}}{{with .Site.Aliases}}<span class="sub">Also: {{join . ", "}}</span>{{end}}</td>
+      <td data-label="Region">{{.Site.Region}}</td>
+      <td data-label="Tasks" class="num">{{.Tasks}}</td>
+      <td data-label="Most urgent">{{if .Summary.Forecasts}}<span class="pill s-{{.Summary.Worst}}">{{.Summary.Worst.Short}}</span>{{else}}<span class="sub">No tasks</span>{{end}}</td>
+      <td class="actions"><a class="button ghost" href="/admin/sites/{{.Site.ID}}">Edit</a></td>
+    </tr>
+  {{else}}
+    <tr><td colspan="6" class="empty">No sites yet. Add the first one below, or import a CSV.</td></tr>
+  {{end}}
+  </tbody>
+</table>
+{{with $d.Archived}}
+<h2>Archived</h2>
+<p class="hint">Hidden from the overview and not matched to new events. History is kept.</p>
+<ul class="plain-list">{{range .}}<li><a href="/admin/sites/{{.Site.ID}}">{{.Site.Code}} {{.Site.Name}}</a> <span class="sub inline">{{.Tasks}} {{plural .Tasks "task" "tasks"}}</span></li>{{end}}</ul>
+{{end}}
+
+<h2 id="add">Add a site</h2>
+<form class="panel" method="post" action="/admin/sites">
+  <div class="grid-4">
+    <label class="stack">Code <input name="code" required placeholder="BKK3" autocomplete="off"><span class="field-hint">Short code used in event titles</span></label>
+    <label class="stack">Name <input name="name" required placeholder="Rama 9"></label>
+    <label class="stack">Region <input name="region" list="regions" placeholder="Bangkok Metro"></label>
+    <label class="stack">Other names <input name="aliases" placeholder="พระราม 9, R9"><span class="field-hint">Comma-separated; Thai names work</span></label>
+  </div>
+  <datalist id="regions">{{range $d.Regions}}<option value="{{.}}">{{end}}</datalist>
+  <fieldset>
+    <legend>PM tasks</legend>
+    <p class="field-hint">Pick the vendor for each system this site has. Add the last PM date if you know it, so the forecast starts right away.</p>
+    <table class="plain compact">
+      <thead><tr><th scope="col">System</th><th scope="col">Vendor</th><th scope="col">Last PM date</th></tr></thead>
+      <tbody>
+      {{range $d.TaskSystems}}
+        <tr>
+          <td data-label="System">{{.Name}}</td>
+          <td data-label="Vendor">{{template "vendorSelect" (dict "Name" (printf "vendor_%s" .Key) "NewName" (printf "newvendor_%s" .Key) "ID" (printf "nv-%s" .Key) "Selected" "" "Cat" $cat "Empty" "Not at this site")}}</td>
+          <td data-label="Last PM date"><input type="date" name="last_{{.Key}}"></td>
+        </tr>
+      {{end}}
+      </tbody>
+    </table>
+    <p class="field-hint">A vendor that isn't in the list yet: pick “Add a new vendor…” and type its name; add its contact details under <a href="/admin/vendors">Vendors</a> later. More than one vendor for the same system: add the second from the site page after saving. Missing a system: add it under <a href="/admin/systems">Systems</a>.</p>
+  </fieldset>
+  <button>Add site</button>
+</form>
+{{end}}

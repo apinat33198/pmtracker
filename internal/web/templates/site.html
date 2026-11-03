@@ -1,0 +1,52 @@
+{{define "content"}}{{$d := .Data}}{{$ss := $d.S}}{{$cat := .Cat}}
+<p class="crumb"><a href="/">Overview</a>{{if .IsAdmin}}<a href="/admin/sites/{{$ss.Site.ID}}">Edit site and tasks</a>{{end}}</p>
+<section class="asset-head">
+  <div>
+    <p class="code">{{$ss.Site.Code}}</p>
+    <h1>{{$ss.Site.Name}}</h1>
+    <p class="lede">{{with $ss.Site.Region}}{{.}}. {{end}}{{len $ss.Forecasts}} PM {{plural (len $ss.Forecasts) "task" "tasks"}}.{{if not $ss.LastPM.IsZero}} Last PM {{date $ss.LastPM}}, {{taskLabel $cat $ss.LastPMTask}}.{{end}}</p>
+  </div>
+  <div class="verdict s-{{$ss.Worst}}">
+    <span class="pill s-{{$ss.Worst}}">{{$ss.Worst.Label}}</span>
+    <ul class="mini-counts">{{range $st := statuses}}{{with index $ss.Counts $st}}<li><i class="dot s-{{$st}}"></i>{{.}} {{$st.Short}}</li>{{end}}{{end}}</ul>
+  </div>
+</section>
+
+<table class="board">
+  <thead><tr><th scope="col">Status</th><th scope="col">System</th><th scope="col">Last PM</th><th scope="col">Next due</th><th scope="col">Booked</th><th scope="col" class="rb-col"><span class="vh">Timeline</span>{{axis $d.Today}}</th></tr></thead>
+  <tbody>
+  {{range $ss.Forecasts}}{{$f := .}}
+    <tr>
+      <td data-label="Status"><span class="pill s-{{.Status}}">{{.Status.Label}}</span></td>
+      <td data-label="System"><a class="asset" href="/tasks/{{.Task.ID}}">{{$cat.SystemName .Task.System}}</a><span class="sub">{{$cat.VendorName .Task.Vendor}}, every {{.Policy.IntervalMonths}} months</span></td>
+      <td data-label="Last PM">{{with .LastDone}}<span class="strong">{{date .Date}}</span><span class="sub">{{.Status.Label}}</span>{{else}}<span class="sub">None on record</span>{{end}}</td>
+      <td data-label="Next due">{{if .HasDue}}<span class="strong">{{dateShort .NextDue}}</span><span class="sub{{if lt .DaysLeft 0}} late{{end}}">{{dueRel .DaysLeft}}</span>{{else}}<span class="sub">No date yet</span>{{end}}</td>
+      <td data-label="Booked">{{with .Booked}}<span class="strong">{{dateShort .Date}}</span><span class="sub{{if eq $f.Status "off_cycle"}} warn{{end}}">{{offset $f.BookedOffset}}</span>{{else}}<span class="sub">Not booked</span>{{end}}</td>
+      <td class="rb-col">{{ribbon .}}</td>
+    </tr>
+  {{else}}
+    <tr><td colspan="6" class="empty">No PM tasks at this site yet.{{if $.IsAdmin}} <a href="/admin/sites/{{$ss.Site.ID}}">Add one</a>.{{end}}</td></tr>
+  {{end}}
+  </tbody>
+</table>
+{{with $d.Vendors}}
+<h2>Vendors at this site</h2>
+{{template "siteVendors" (dict "Vendors" . "Admin" $.IsAdmin)}}
+{{end}}
+{{with $d.Paused}}<p class="hint">Paused: {{range $i, $t := .}}{{if $i}}, {{end}}{{$cat.SystemName $t.System}} by {{$cat.VendorName $t.Vendor}}{{end}}. Paused tasks get no forecast or reminders.</p>{{end}}
+
+{{if and .IsEditor $ss.Forecasts}}
+<h2>Record a PM visit</h2>
+<p class="hint">For a visit that isn't on the calendar, or history from paper records. Tick every system the vendor serviced on that trip.</p>
+<form class="row-form" method="post" action="/visits/manual">
+  <input type="hidden" name="back" value="{{.Back}}">
+  <fieldset class="grow"><legend>Tasks</legend><div class="checks inline">{{range $ss.Forecasts}}<label><input type="checkbox" name="tasks" value="{{.Task.ID}}">{{$cat.SystemName .Task.System}} by {{$cat.VendorName .Task.Vendor}}</label>{{end}}</div></fieldset>
+  <label>Date <input type="date" name="date" max="{{iso $d.Today}}" required></label>
+  <label class="grow">Note <input name="note" placeholder="Service report number or technician"></label>
+  <button>Record visit</button>
+</form>
+{{end}}
+
+<h2>Recent visits</h2>
+{{template "visits" (dict "Visits" $d.Visits "Page" . "ShowTasks" true)}}
+{{end}}

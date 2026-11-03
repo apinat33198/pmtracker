@@ -1,0 +1,35 @@
+{{define "content"}}{{$d := .Data}}{{$cat := .Cat}}
+<section class="page-head">
+  <h1>Calendar events</h1>
+  <p class="lede">Everything mirrored from the tracked calendars, with what the matcher decided and why. Use it to check titles and rules.</p>
+</section>
+
+<nav class="chips" aria-label="Filter events">
+  <a class="chip{{if not $d.Filter}} on{{end}}" href="/events">All <b>{{len .Snap.Events}}</b></a>
+  <a class="chip{{if eq $d.Filter "full"}} on{{end}}" href="/events?show=full">PM visits <b>{{index $d.Counts "full"}}</b></a>
+  <a class="chip{{if eq $d.Filter "partial"}} on{{end}}" href="/events?show=partial">Needs review <b>{{index $d.Counts "partial"}}</b></a>
+  <a class="chip{{if eq $d.Filter "none"}} on{{end}}" href="/events?show=none">Not PM <b>{{index $d.Counts "none"}}</b></a>
+</nav>
+
+<table class="events">
+  <thead><tr><th scope="col">Date</th><th scope="col">Event</th><th scope="col">Result</th><th scope="col">Why</th><th scope="col"><span class="vh">Actions</span></th></tr></thead>
+  <tbody>
+  {{range $d.Events}}{{$c := .Match.Class.String}}
+    <tr{{if .Event.Cancelled}} class="is-cancelled"{{end}}>
+      <td data-label="Date"><span class="strong">{{date .Event.Start}}</span><span class="sub">{{fromToday .Event.Start}}</span></td>
+      <td data-label="Event"><span>{{.Event.Summary}}</span><span class="sub">{{calLabel $cat .Event.CalendarID}}{{if .Event.Cancelled}}, cancelled{{end}}</span></td>
+      <td data-label="Result">
+        {{if eq $c "full"}}<span class="tag tag-full">PM visit</span><span class="sub">{{range $i, $t := .Match.Tasks}}{{if $i}}, {{end}}<a href="/tasks/{{$t}}">{{taskLabel $cat $t}}</a>{{end}}</span>
+        {{else if eq $c "partial"}}<span class="tag tag-partial">Needs review</span>
+        {{else if eq .Match.Method "ignored"}}<span class="tag">Not PM, by hand</span>
+        {{else}}<span class="tag">Not PM</span>{{end}}
+      </td>
+      <td data-label="Why"><ul class="why compact">{{range .Match.Reasons}}<li class="yes">{{.}}</li>{{end}}{{range .Match.Missing}}<li class="no">{{.}}</li>{{end}}{{if and (not .Match.Reasons) (not .Match.Missing)}}<li>No PM keyword, site or vendor</li>{{end}}</ul></td>
+      <td class="actions">{{if and $.IsEditor .Decision}}<form method="post" action="/events/undo"><input type="hidden" name="event" value="{{.Event.Key}}"><input type="hidden" name="back" value="{{$.Back}}"><button class="ghost">Undo decision</button></form>{{end}}</td>
+    </tr>
+  {{else}}
+    <tr><td colspan="5" class="empty">No events yet. Run a sync, or check the calendars under Admin.</td></tr>
+  {{end}}
+  </tbody>
+</table>
+{{end}}

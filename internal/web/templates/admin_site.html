@@ -1,0 +1,76 @@
+{{define "content"}}{{$d := .Data}}{{$cat := .Cat}}{{$s := $d.Site}}
+{{template "adminnav" "sites"}}
+<p class="crumb"><a href="/admin/sites">All sites</a>{{if not $s.Archived}}<a href="/sites/{{$s.ID}}">View {{$s.Code}} on the overview</a>{{end}}</p>
+<section class="page-head">
+  <h1>{{$s.Code}} {{$s.Name}}{{if $s.Archived}} <span class="tag">Archived</span>{{end}}</h1>
+  <p class="lede">{{len $d.Tasks}} PM {{plural (len $d.Tasks) "task" "tasks"}}.</p>
+</section>
+
+<h2>Site details</h2>
+<form class="panel" method="post" action="/admin/sites/{{$s.ID}}">
+  <div class="grid-4">
+    <label class="stack">Code <input name="code" value="{{$s.Code}}" required><span class="field-hint">Renaming keeps the old code as another name</span></label>
+    <label class="stack">Name <input name="name" value="{{$s.Name}}" required></label>
+    <label class="stack">Region <input name="region" value="{{$s.Region}}" list="regions"></label>
+    <label class="stack">Other names <input name="aliases" value="{{join $s.Aliases ", "}}"><span class="field-hint">Matched in event titles and locations</span></label>
+  </div>
+  <datalist id="regions">{{range $d.Regions}}<option value="{{.}}">{{end}}</datalist>
+  <label class="stack">Notes <input name="notes" value="{{$s.Notes}}" placeholder="Access hours, contact on site"></label>
+  <button>Save site</button>
+</form>
+
+<h2>Vendors at this site</h2>
+{{if $d.Vendors}}{{template "siteVendors" (dict "Vendors" $d.Vendors "Admin" true)}}{{else}}<p class="hint">None yet. Vendors come from the site's PM tasks below.</p>{{end}}
+<p class="hint small"><a href="/admin/vendors">Manage the vendor list</a>: add, edit, delete, or move one vendor's tasks to another.</p>
+
+<h2>PM tasks</h2>
+<table class="plain">
+  <thead><tr><th scope="col">System</th><th scope="col">Vendor</th><th scope="col">Cycle</th><th scope="col">Last PM</th><th scope="col">Status</th><th scope="col"><span class="vh">Actions</span></th></tr></thead>
+  <tbody>
+  {{range $d.Tasks}}
+    <tr>
+      <td data-label="System"><span class="strong">{{$cat.SystemName .Task.System}}</span>{{with .Task.Notes}}<span class="sub">{{.}}</span>{{end}}</td>
+      <td data-label="Vendor">{{$cat.VendorName .Task.Vendor}}</td>
+      <td data-label="Cycle">{{if .Live}}{{template "cycle" .Forecast.Policy}}{{else}}Every {{if .Task.IntervalMonths}}{{.Task.IntervalMonths}}{{else}}{{$.Cfg.Defaults.IntervalMonths}}{{end}} months{{end}}</td>
+      <td data-label="Last PM">{{if .Live}}{{with .Forecast.LastDone}}{{date .Date}}{{else}}<span class="sub">None</span>{{end}}{{else}}<span class="sub">–</span>{{end}}</td>
+      <td data-label="Status">{{if .Task.Paused}}<span class="tag">Paused</span>{{else if .Live}}<span class="pill s-{{.Forecast.Status}}">{{.Forecast.Status.Short}}</span>{{else}}<span class="sub">Site archived</span>{{end}}</td>
+      <td class="actions"><a class="button ghost" href="/admin/tasks/{{.Task.ID}}">Edit</a></td>
+    </tr>
+  {{else}}
+    <tr><td colspan="6" class="empty">No PM tasks yet. Add one below.</td></tr>
+  {{end}}
+  </tbody>
+</table>
+
+<h2>Add a PM task</h2>
+<form class="panel" method="post" action="/admin/sites/{{$s.ID}}/tasks">
+  <div class="grid-4">
+    <label class="stack">System <select name="system" required>{{range $cat.Systems}}<option value="{{.Key}}">{{.Name}}</option>{{end}}</select></label>
+    <div class="stack"><span class="label">Vendor</span>{{template "vendorSelect" (dict "Name" "vendor" "NewName" "new_vendor" "ID" "nv-task" "Selected" "" "Cat" $cat "Empty" "")}}</div>
+    <label class="stack">Every <span class="with-unit"><input name="interval_months" type="number" min="1" max="60" value="{{$.Cfg.Defaults.IntervalMonths}}"> months</span></label>
+    <label class="stack">Last PM date <input type="date" name="last_pm" max="{{iso $.Snap.Today}}"><span class="field-hint">Optional; starts the forecast</span></label>
+  </div>
+  <details>
+    <summary>Contract slots and notes</summary>
+    <div class="grid-4">
+      <label class="stack">Cycle <select name="anchor_mode"><option value="rolling">From the last visit</option><option value="fixed">Fixed contract slots</option></select></label>
+      <label class="stack">First slot date <input type="date" name="anchor_date"><span class="field-hint">Needed for fixed slots</span></label>
+      <label class="stack span-2">Notes <input name="notes" placeholder="Contract number, equipment model"></label>
+    </div>
+  </details>
+  <button>Add task</button>
+</form>
+
+<h2>Archive or delete</h2>
+<div class="danger">
+  <form method="post" action="/admin/sites/{{$s.ID}}/archive">
+    <p>{{if $s.Archived}}Restore the site to bring it back to the overview.{{else}}Archiving hides the site from the overview and stops matching new events to it. All history is kept and you can restore it.{{end}}</p>
+    <button class="ghost">{{if $s.Archived}}Restore site{{else}}Archive site{{end}}</button>
+  </form>
+  <form method="post" action="/admin/sites/{{$s.ID}}/delete">
+    <p>Deleting removes the site, its {{len $d.Tasks}} PM {{plural (len $d.Tasks) "task" "tasks"}} and visits recorded by hand. Calendar events stay in Google. This can't be undone.</p>
+    <label class="stack">Type {{$s.Code}} to confirm <input name="confirm" autocomplete="off" required></label>
+    <button class="danger-button">Delete site</button>
+  </form>
+</div>
+{{end}}

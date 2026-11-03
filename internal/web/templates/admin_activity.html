@@ -1,0 +1,17 @@
+{{define "content"}}
+{{template "adminnav" "activity"}}
+<section class="page-head">
+  <h1>Activity</h1>
+  <p class="lede">Who changed what: sites, tasks, vendors, calendars, inbox decisions and visit confirmations. The latest 300 entries.</p>
+</section>
+<table class="plain">
+  <thead><tr><th scope="col">When</th><th scope="col">Who</th><th scope="col">What</th></tr></thead>
+  <tbody>
+  {{range .Data}}
+    <tr><td data-label="When">{{dateTime .At}}<span class="sub">{{ago .At}}</span></td><td data-label="Who">{{.By}}</td><td data-label="What">{{.Action}}</td></tr>
+  {{else}}
+    <tr><td colspan="3" class="empty">Nothing yet.</td></tr>
+  {{end}}
+  </tbody>
+</table>
+{{end}}
