@@ -130,6 +130,7 @@ func run(cmd, cfgPath string, demoMode, keep bool, addr, dataPath, todayFlag str
 		if err := os.Remove(cfg.DataFile); err != nil && !errors.Is(err, os.ErrNotExist) {
 			return err
 		}
+		os.RemoveAll(store.ActivityDir(cfg.DataFile))
 	}
 	if !demoMode {
 		if problems := cfg.SecretProblems(); len(problems) > 0 {
@@ -141,6 +142,19 @@ func run(cmd, cfgPath string, demoMode, keep bool, addr, dataPath, todayFlag str
 		return err
 	}
 	st.SetClock(now)
+	st.Logf = logger.Printf
+	if err := st.Activity().SetKeepDays(cfg.Activity.KeepDays); err != nil {
+		logger.Printf("activity log: %v", err)
+	}
+	// A second copy of every activity entry in the server log (journald),
+	// outside the tracker's own files.
+	st.Activity().OnAppend = func(e store.AuditEntry) {
+		from := ""
+		if e.From != "" {
+			from = " from " + e.From
+		}
+		logger.Printf("activity: %s%s: %s", e.By, from, e.Action)
+	}
 	if cat := st.Catalog(); len(cat.Sites) == 0 && len(cat.Systems) == 0 && len(cat.Calendars) == 0 {
 		// First run: seed the catalog.
 		err := st.UpdateCatalog("system", "Created the data file", func(c *core.Catalog) error {

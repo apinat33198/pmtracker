@@ -123,6 +123,7 @@ func (s *Server) Handler() (http.Handler, error) {
 	handle("POST /admin/import", a, s.adminImportPost)
 	handle("GET /admin/import/template.csv", a, s.adminImportTemplate)
 	handle("GET /admin/activity", a, s.adminActivity)
+	handle("GET /admin/activity.csv", a, s.adminActivityCSV)
 	handle("GET /admin/backups", a, s.adminBackups)
 	handle("POST /admin/backups", a, s.adminBackupNow)
 	handle("GET /admin/backups/file/{name}", a, s.adminBackupFile)

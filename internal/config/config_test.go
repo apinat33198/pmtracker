@@ -91,7 +91,7 @@ func TestProxyWarning(t *testing.T) {
 
 func TestBackupDefaults(t *testing.T) {
 	c, _ := Parse([]byte(`{"data_file": "/var/lib/pmtracker/data.json"}`))
-	if c.Backup.Time != "02:30" || c.Backup.KeepDays != 30 || c.BackupDir() != "/var/lib/pmtracker/backups" {
+	if c.Backup.Time != "02:30" || c.Backup.KeepDays != 30 || c.BackupDir() != "/var/lib/pmtracker/backups" || c.Activity.KeepDays != 90 {
 		t.Errorf("backup = %+v, dir %s", c.Backup, c.BackupDir())
 	}
 	if _, err := Parse([]byte(`{"backup": {"time": "2am"}}`)); err == nil {

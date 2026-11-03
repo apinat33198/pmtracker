@@ -2,6 +2,7 @@ package web
 
 import (
 	"bytes"
+	"encoding/csv"
 	"errors"
 	"fmt"
 	"io"
@@ -1016,8 +1017,37 @@ func (s *Server) adminImportPost(w http.ResponseWriter, r *http.Request) {
 
 // --- activity ---
 
+type activityData struct {
+	Entries  []store.AuditEntry
+	KeepDays int
+	Oldest   time.Time
+	Shown    int
+}
+
 func (s *Server) adminActivity(w http.ResponseWriter, r *http.Request) {
-	s.render(w, r, "admin_activity", "admin", "Activity", s.snapshot(), s.Store.Audit(300))
+	const shown = 500
+	d := activityData{Entries: s.Store.Audit(shown), KeepDays: s.Store.Activity().KeepDays(),
+		Oldest: s.Store.Activity().Oldest(), Shown: shown}
+	s.render(w, r, "admin_activity", "admin", "Activity", s.snapshot(), d)
+}
+
+// adminActivityCSV exports every entry kept, oldest first, for audits.
+func (s *Server) adminActivityCSV(w http.ResponseWriter, r *http.Request) {
+	u := userOf(r)
+	s.Store.LogFrom(u.Name, s.clientAddr(r), "Downloaded the activity log")
+	loc := s.Cfg.Location()
+	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="pm-activity-%s.csv"`, s.Now().In(loc).Format("2006-01-02")))
+	w.Write([]byte("\ufeff"))
+	cw := csv.NewWriter(w)
+	cw.Write([]string{"time", "by", "from", "action"})
+	err := s.Store.Activity().Each(func(e store.AuditEntry) error {
+		return cw.Write([]string{e.At.In(loc).Format(time.RFC3339), csvCell(e.By), csvCell(e.From), csvCell(e.Action)})
+	})
+	cw.Flush()
+	if err != nil {
+		s.Log.Printf("activity export: %v", err)
+	}
 }
 
 func containsFold(list []string, s string) bool {

@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"sort"
@@ -30,10 +31,11 @@ type CalendarState struct {
 	LastChanges    int       `json:"last_changes"`
 }
 
-// AuditEntry records an admin or editor action.
+// AuditEntry records an action: who, when, from where (for sign-ins), what.
 type AuditEntry struct {
 	At     time.Time `json:"at"`
 	By     string    `json:"by"`
+	From   string    `json:"from,omitempty"`
 	Action string    `json:"action"`
 }
 
@@ -47,9 +49,11 @@ type state struct {
 	Marks     map[string]core.VisitMark `json:"marks"`
 	Manual    []core.ManualVisit        `json:"manual"`
 	Changes   []core.Change             `json:"changes"`
-	Audit     []AuditEntry              `json:"audit"`
-	NextID    int                       `json:"next_id"`
-	Users     []auth.User               `json:"users"`
+	// Audit is where the activity log was kept before it moved to its own
+	// files; read once to move old entries over, then always empty.
+	Audit  []AuditEntry `json:"audit,omitempty"`
+	NextID int          `json:"next_id"`
+	Users  []auth.User  `json:"users"`
 	// SessionSecret signs session cookies; generated on first use.
 	SessionSecret []byte `json:"session_secret,omitempty"`
 	// Demo marks a file created by -demo, which -demo may replace.
@@ -57,13 +61,15 @@ type state struct {
 }
 
 type Store struct {
-	mu   sync.RWMutex
-	path string
-	st   state
-	now  func() time.Time
+	mu       sync.RWMutex
+	path     string
+	st       state
+	now      func() time.Time
+	activity *ActivityLog
+	pending  []AuditEntry // activity of the change being saved
+	// Logf reports problems writing the activity log (default: log.Printf).
+	Logf func(format string, args ...any)
 }
-
-const maxAudit = 2000
 
 // currentVersion is the data file's format version.
 const currentVersion = 2
@@ -83,8 +89,27 @@ func Open(path string) (*Store, error) {
 		}
 	}
 	s.st.normalize()
+	s.Logf = log.Printf
+	act, err := openActivity(ActivityDir(path), func() time.Time { return s.now() })
+	if err != nil {
+		return nil, err
+	}
+	s.activity = act
+	// Move entries from data files written before the log had its own files.
+	if len(s.st.Audit) > 0 {
+		if err := act.Append(s.st.Audit...); err != nil {
+			return nil, err
+		}
+		s.st.Audit = nil
+		if err := s.write(); err != nil {
+			return nil, err
+		}
+	}
 	return s, nil
 }
+
+// Activity is the activity log.
+func (s *Store) Activity() *ActivityLog { return s.activity }
 
 func (st *state) normalize() {
 	if st.Calendars == nil {
@@ -154,6 +179,7 @@ func (s *Store) Restore(b []byte, by, action string) error {
 		st.Users[i].Epoch++
 	}
 	st.Demo = s.st.Demo
+	st.Audit = nil // the activity log isn't part of the data, and a restore can't rewrite it
 	prev := s.st
 	s.st = st
 	s.audit(by, action)
@@ -167,7 +193,21 @@ func (s *Store) Restore(b []byte, by, action string) error {
 // SetClock overrides the clock used for audit timestamps.
 func (s *Store) SetClock(now func() time.Time) { s.now = now }
 
+// save writes the data file, then the activity of the change. If the data
+// can't be saved, the change didn't happen and its activity is dropped.
 func (s *Store) save() error {
+	pending := s.pending
+	s.pending = nil
+	if err := s.write(); err != nil {
+		return err
+	}
+	if err := s.activity.Append(pending...); err != nil {
+		s.Logf("activity log: %v", err)
+	}
+	return nil
+}
+
+func (s *Store) write() error {
 	b, err := json.MarshalIndent(s.st, "", " ")
 	if err != nil {
 		return err
@@ -199,19 +239,14 @@ func (s *Store) audit(by, action string) {
 	if by == "" {
 		by = "system"
 	}
-	s.st.Audit = append(s.st.Audit, AuditEntry{At: s.now(), By: by, Action: action})
-	if n := len(s.st.Audit); n > maxAudit {
-		s.st.Audit = append([]AuditEntry(nil), s.st.Audit[n-maxAudit:]...)
-	}
+	s.pending = append(s.pending, AuditEntry{At: s.now(), By: by, Action: action})
 }
 
 // Audit returns recent entries, newest first.
 func (s *Store) Audit(limit int) []AuditEntry {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	var out []AuditEntry
-	for i := len(s.st.Audit) - 1; i >= 0 && len(out) < limit; i-- {
-		out = append(out, s.st.Audit[i])
+	out, err := s.activity.Recent(limit)
+	if err != nil {
+		s.Logf("activity log: %v", err)
 	}
 	return out
 }
@@ -608,12 +643,18 @@ func (s *Store) RecordLogin(username string, at time.Time) {
 	}
 }
 
-// Audit records an action that isn't otherwise stored (failed sign-in lockouts).
+// Log records an action that doesn't change the data (sign-ins,
+// downloads, lockouts).
 func (s *Store) Log(by, action string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.audit(by, action)
-	return s.save()
+	return s.LogFrom(by, "", action)
+}
+
+// LogFrom records an action with the address it came from.
+func (s *Store) LogFrom(by, from, action string) error {
+	if by == "" {
+		by = "system"
+	}
+	return s.activity.Append(AuditEntry{At: s.now(), By: by, From: from, Action: action})
 }
 
 // SessionSecret returns the key that signs session cookies, creating it once.

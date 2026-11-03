@@ -28,6 +28,7 @@
   "digest": {"time": "08:00", "telegram_bot_token": "", "telegram_chat_id": ""},
 
   "backup": {"time": "02:30", "keep_days": 30, "dir": ""},
+  "activity": {"keep_days": 90},
 
   "trusted_proxies": ["127.0.0.1", "::1"],
 

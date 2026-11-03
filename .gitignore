@@ -5,3 +5,4 @@
 pmtracker-data.json
 pmtracker-demo.json
 .pmtracker-*.tmp
+*-activity/

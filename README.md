@@ -180,8 +180,9 @@ top right).
   account's other sessions; deleting an account ends all of them.
 - Five wrong passwords for a username from one address block it for 15
   minutes; 20 from one address block that address (IPv6 is counted per /64);
-  30 for one username from any mix of addresses block that username. Blocks of
-  real accounts are logged under **Admin, Activity**.
+  30 for one username from any mix of addresses block that username. Sign-ins,
+  wrong passwords and blocks of real accounts are recorded under **Admin,
+  Activity**.
 - With an `https://` `public_url`, the tracker won't take a password over plain
   HTTP from another machine (someone opening `http://<LAN address>:8080`): the
   sign-in page points to the HTTPS address instead.
@@ -228,6 +229,35 @@ example value or a token shorter than 24 characters.
 **Locked out?** Add a user to `auth.users` in the config with a hashed
 password and restart, sign in as them, and set a new password for your
 account under Admin, Users.
+
+## Activity log
+
+**Admin, Activity** records who did what, when, and for sign-ins from which
+address:
+- sign-ins, sign-outs, wrong passwords for real accounts, and lockouts
+- account changes
+- every change to sites, tasks, vendors, systems and calendars
+- inbox decisions and visit confirmations
+- imports, backups, restores and downloads
+
+- **Kept for 90 days** (`"activity": {"keep_days": 90}`): today and the 90 days
+  before it, then deleted. ISO 27001 (control A.8.15, Logging) leaves the period
+  to your own policy; set it to whatever yours says.
+- **Stored on its own**, in `data-activity/` next to the data file
+  (`/var/lib/pmtracker/data-activity`), one append-only file per day,
+  readable by the service only. Nothing in the web interface can edit or delete
+  entries, and restoring a backup doesn't change them (the restore itself is
+  recorded).
+- **A second copy** of every entry goes to the server log:
+  `journalctl -u pmtracker | grep activity:`. journald keeps it by size, so make
+  sure it has room for 90 days, or forward it to a central log server.
+- **Download all (CSV)** on the Activity page exports every entry kept, for
+  audits. Downloads are recorded too.
+- Times come from the server's clock, which in a Proxmox container is the
+  host's, so keep NTP running on the host.
+- Root on the container can still delete the files. For logs nobody on the
+  tracker's server can change, forward the server log elsewhere, and keep
+  Proxmox backups of the container.
 
 ## Backups
 
@@ -375,8 +405,9 @@ internal/core      catalog (sites, systems, vendors, tasks, calendars), matcher,
                    digest, ICS feed
 internal/gcal      service-account client, events.list paging, syncer with 410 recovery
 internal/store     JSON-file store: catalog, mirrored events, decisions, rules,
-                   marks, hand-recorded visits, change log, activity log,
-                   accounts and the session key
+                   marks, hand-recorded visits, change log, accounts and the
+                   session key; the activity log in its own daily files
+internal/backup    daily backups, pruning, restore input
 internal/web       pages, sign-in, setup, accounts, admin handlers, role checks,
                    templates, timeline SVG, CSS
 internal/demo      21-site demo catalog and fake calendar

@@ -1,16 +1,20 @@
-{{define "content"}}
+{{define "content"}}{{$d := .Data}}
 {{template "adminnav" "activity"}}
-<section class="page-head">
-  <h1>Activity</h1>
-  <p class="lede">Who changed what: sites, tasks, vendors, calendars, inbox decisions and visit confirmations. The latest 300 entries.</p>
+<section class="page-head with-tools">
+  <div>
+    <h1>Activity</h1>
+    <p class="lede">Who did what and when: sign-ins and failed sign-ins, changes to sites, tasks, vendors, calendars and users, inbox decisions, visit confirmations, backups and restores.</p>
+    <p class="hint small">Every entry is kept for {{$d.KeepDays}} days{{if not $d.Oldest.IsZero}} (the oldest kept is from {{date $d.Oldest}}){{end}}, then deleted. Entries can't be edited or removed from here, and a restore doesn't change them. This page shows the latest {{$d.Shown}}; the download has them all.</p>
+  </div>
+  <a class="button ghost" href="/admin/activity.csv">Download all (CSV)</a>
 </section>
-<table class="plain">
-  <thead><tr><th scope="col">When</th><th scope="col">Who</th><th scope="col">What</th></tr></thead>
+<table class="plain activity">
+  <thead><tr><th scope="col">When</th><th scope="col">Who</th><th scope="col">From</th><th scope="col">What</th></tr></thead>
   <tbody>
-  {{range .Data}}
-    <tr><td data-label="When">{{dateTime .At}}<span class="sub">{{ago .At}}</span></td><td data-label="Who">{{.By}}</td><td data-label="What">{{.Action}}</td></tr>
+  {{range $d.Entries}}
+    <tr><td data-label="When">{{dateTime .At}}<span class="sub">{{ago .At}}</span></td><td data-label="Who">{{.By}}</td><td data-label="From">{{with .From}}<code>{{.}}</code>{{else}}<span class="sub inline">–</span>{{end}}</td><td data-label="What">{{.Action}}</td></tr>
   {{else}}
-    <tr><td colspan="3" class="empty">Nothing yet.</td></tr>
+    <tr><td colspan="4" class="empty">Nothing yet.</td></tr>
   {{end}}
   </tbody>
 </table>

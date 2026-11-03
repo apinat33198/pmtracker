@@ -245,6 +245,9 @@ func (s *Server) identify(r *http.Request) (user, string) {
 		}
 		a, ok := s.checkPassword(name, pass)
 		if !ok {
+			if _, known := s.account(name); known {
+				s.Store.LogFrom(name, addr, "Sign-in failed (script access): wrong password")
+			}
 			s.failed(name, addr)
 			return user{}, "Wrong username or password."
 		}
@@ -419,10 +422,10 @@ func (s *Server) failed(name, addr string) bool {
 	if r := []rune(name); len(r) > 40 {
 		name = string(r[:40]) + "…"
 	}
-	msg := fmt.Sprintf("Blocked sign-ins as %q from %s for %s after repeated wrong passwords", name, addr, minutes(s.limiter.Lockout))
-	s.Log.Print("auth: " + msg)
+	msg := fmt.Sprintf("Blocked sign-ins as %q for %s after repeated wrong passwords", name, minutes(s.limiter.Lockout))
+	s.Log.Printf("auth: %s (from %s)", msg, addr)
 	if known { // guesses at made-up usernames go to the server log only, so they can't flood Activity
-		s.Store.Log("security", msg)
+		s.Store.LogFrom("security", addr, msg)
 	}
 	return true
 }
@@ -511,6 +514,9 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	}
 	a, ok := s.checkPassword(name, r.FormValue("password"))
 	if !ok {
+		if _, known := s.account(name); known {
+			s.Store.LogFrom(name, addr, "Sign-in failed: wrong password")
+		}
 		d.Error = "That username and password don't match an account."
 		if s.failed(name, addr) {
 			d.Error = "Too many failed sign-ins. Try again in " + minutes(s.limiter.Lockout) + "."
@@ -522,11 +528,19 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	if !a.Config {
 		s.Store.RecordLogin(a.Username, s.Now())
 	}
+	action := "Signed in"
+	if d.Keep {
+		action = "Signed in (kept for 30 days)"
+	}
+	s.Store.LogFrom(a.Username, addr, action)
 	s.signIn(w, r, a, d.Keep)
 	http.Redirect(w, r, d.Next, http.StatusSeeOther)
 }
 
 func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
+	if u := userOf(r); u.SignedIn {
+		s.Store.LogFrom(u.Name, s.clientAddr(r), "Signed out")
+	}
 	s.clearSession(w, r)
 	s.redirect(w, r, "/login", "You're signed out.", "")
 }

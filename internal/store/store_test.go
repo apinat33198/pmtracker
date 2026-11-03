@@ -2,6 +2,8 @@ package store
 
 import (
 	"encoding/json"
+	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -188,5 +190,74 @@ func TestRestoreIsSafe(t *testing.T) {
 	}
 	if u, _ := s.User("mallory"); u.Epoch <= 3 {
 		t.Errorf("restored accounts must be signed out (epoch %d)", u.Epoch)
+	}
+}
+
+func TestActivityLogKeeps90Days(t *testing.T) {
+	dir := t.TempDir()
+	now := time.Date(2026, 11, 3, 10, 0, 0, 0, time.UTC)
+	s, _ := Open(filepath.Join(dir, "data.json"))
+	s.SetClock(func() time.Time { return now })
+	// One entry a day for 120 days.
+	start := now.AddDate(0, 0, -119)
+	for d := 0; d < 120; d++ {
+		now = start.AddDate(0, 0, d)
+		s.Log("admin", fmt.Sprintf("Day %d", d))
+	}
+	all := s.Audit(1000)
+	if len(all) != 91 || all[0].Action != "Day 119" || all[90].Action != "Day 29" {
+		t.Fatalf("kept %d entries, newest %q, oldest %q", len(all), all[0].Action, all[len(all)-1].Action)
+	}
+	if got := s.Activity().Oldest(); !got.Equal(start.AddDate(0, 0, 29)) {
+		t.Errorf("oldest kept = %v", got)
+	}
+	// Retention can be made longer (or shorter) by config.
+	s.Activity().SetKeepDays(30)
+	if n := len(s.Audit(1000)); n != 31 {
+		t.Errorf("30-day retention kept %d", n)
+	}
+	// Files are private and only ever appended to.
+	files, _ := os.ReadDir(ActivityDir(filepath.Join(dir, "data.json")))
+	info, _ := files[0].Info()
+	if info.Mode().Perm() != 0o600 {
+		t.Errorf("log file mode %v", info.Mode().Perm())
+	}
+}
+
+func TestActivityLogSurvivesRestoreAndMovesOldEntries(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "data.json")
+	// A data file from before the log had its own files.
+	old := `{"version": 2, "audit": [{"at": "2026-10-01T09:00:00Z", "by": "admin", "action": "Added site BKK1"}]}`
+	os.WriteFile(path, []byte(old), 0o600)
+	s, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.SetClock(func() time.Time { return time.Date(2026, 11, 3, 10, 0, 0, 0, time.UTC) })
+	if a := s.Audit(10); len(a) != 1 || a[0].Action != "Added site BKK1" {
+		t.Fatalf("old entries should move to the log: %+v", a)
+	}
+	if b, _ := os.ReadFile(path); strings.Contains(string(b), "Added site BKK1") {
+		t.Error("the data file should no longer hold the log")
+	}
+	backup, _ := s.Export()
+	s.LogFrom("somchai", "203.0.113.9", "Signed in")
+	// A restore (even of a file carrying its own "audit") can't rewrite the log.
+	var m map[string]any
+	json.Unmarshal(backup, &m)
+	m["audit"] = []map[string]any{{"at": "2026-11-01T00:00:00Z", "by": "x", "action": "forged"}}
+	crafted, _ := json.Marshal(m)
+	if err := s.Restore(crafted, "admin", "Restored all data from x"); err != nil {
+		t.Fatal(err)
+	}
+	a := s.Audit(10)
+	if len(a) != 3 || a[0].Action != "Restored all data from x" || a[1].From != "203.0.113.9" {
+		t.Errorf("log after restore = %+v", a)
+	}
+	for _, e := range a {
+		if e.Action == "forged" {
+			t.Error("a restore must not add entries from the file")
+		}
 	}
 }

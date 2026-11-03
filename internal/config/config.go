@@ -41,6 +41,7 @@ type Config struct {
 	Feed                Feed           `json:"feed"`
 	Digest              Digest         `json:"digest"`
 	Backup              Backup         `json:"backup"`
+	Activity            Activity       `json:"activity"`
 	Auth                Auth           `json:"auth"`
 	SeedCalendars       []SeedCalendar `json:"calendars"`
 	// TrustedProxies are reverse proxies (addresses or CIDRs) whose
@@ -74,6 +75,11 @@ type SeedCalendar struct {
 
 type Feed struct {
 	Token string `json:"token"`
+}
+
+// Activity is the activity log (who did what, sign-ins).
+type Activity struct {
+	KeepDays int `json:"keep_days"` // default 90
 }
 
 // Backup is the daily copy of the data file.
@@ -192,6 +198,9 @@ func (c *Config) finish() error {
 	}
 	if c.Backup.KeepDays <= 0 {
 		c.Backup.KeepDays = 30
+	}
+	if c.Activity.KeepDays <= 0 {
+		c.Activity.KeepDays = 90
 	}
 	switch c.Auth.AnonymousAccess {
 	case "":
