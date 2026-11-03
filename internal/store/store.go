@@ -6,6 +6,7 @@
 package store
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -64,10 +65,13 @@ type Store struct {
 
 const maxAudit = 2000
 
+// currentVersion is the data file's format version.
+const currentVersion = 2
+
 // Open loads path, or starts empty if it does not exist.
 func Open(path string) (*Store, error) {
 	s := &Store{path: path, now: time.Now}
-	s.st = state{Version: 2}
+	s.st = state{Version: currentVersion}
 	b, err := os.ReadFile(path)
 	switch {
 	case errors.Is(err, os.ErrNotExist):
@@ -78,22 +82,74 @@ func Open(path string) (*Store, error) {
 			return nil, fmt.Errorf("store %s: %w", path, err)
 		}
 	}
-	if s.st.Calendars == nil {
-		s.st.Calendars = map[string]*CalendarState{}
-	}
-	if s.st.Events == nil {
-		s.st.Events = map[string]core.Event{}
-	}
-	if s.st.Decisions == nil {
-		s.st.Decisions = map[string]core.Decision{}
-	}
-	if s.st.Marks == nil {
-		s.st.Marks = map[string]core.VisitMark{}
-	}
-	if s.st.NextID == 0 {
-		s.st.NextID = 1
-	}
+	s.st.normalize()
 	return s, nil
+}
+
+func (st *state) normalize() {
+	if st.Calendars == nil {
+		st.Calendars = map[string]*CalendarState{}
+	}
+	if st.Events == nil {
+		st.Events = map[string]core.Event{}
+	}
+	if st.Decisions == nil {
+		st.Decisions = map[string]core.Decision{}
+	}
+	if st.Marks == nil {
+		st.Marks = map[string]core.VisitMark{}
+	}
+	if st.NextID == 0 {
+		st.NextID = 1
+	}
+}
+
+// Export returns everything as JSON for a backup, without the key that
+// signs sign-in cookies: a leaked backup can't be used to forge sessions.
+func (s *Store) Export() ([]byte, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	st := s.st
+	st.SessionSecret = nil
+	return json.MarshalIndent(st, "", " ")
+}
+
+// ErrNotBackup means the file isn't a PM tracker backup.
+var ErrNotBackup = errors.New("this isn't a PM tracker backup")
+
+// Restore replaces everything with a backup made by Export, after checking
+// it. Sign-ins keep working with the current signing key.
+func (s *Store) Restore(b []byte, by, action string) error {
+	var st state
+	dec := json.NewDecoder(bytes.NewReader(b))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&st); err != nil {
+		return fmt.Errorf("%w (%v)", ErrNotBackup, err)
+	}
+	if st.Version == 0 {
+		return ErrNotBackup
+	}
+	if st.Version > currentVersion {
+		return fmt.Errorf("this backup is from a newer version of the tracker (data version %d); update the tracker first", st.Version)
+	}
+	if err := st.Catalog.Validate(); err != nil {
+		return fmt.Errorf("the backup's sites and tasks don't check out: %v", err)
+	}
+	st.normalize()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if len(st.SessionSecret) < 32 {
+		st.SessionSecret = s.st.SessionSecret
+	}
+	st.Demo = s.st.Demo
+	prev := s.st
+	s.st = st
+	s.audit(by, action)
+	if err := s.save(); err != nil {
+		s.st = prev
+		return err
+	}
+	return nil
 }
 
 // SetClock overrides the clock used for audit timestamps.

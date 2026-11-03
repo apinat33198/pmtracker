@@ -14,6 +14,7 @@ import (
 	"net/netip"
 	"net/url"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
@@ -39,6 +40,7 @@ type Config struct {
 	Holidays            []string       `json:"holidays"`
 	Feed                Feed           `json:"feed"`
 	Digest              Digest         `json:"digest"`
+	Backup              Backup         `json:"backup"`
 	Auth                Auth           `json:"auth"`
 	SeedCalendars       []SeedCalendar `json:"calendars"`
 	// TrustedProxies are reverse proxies (addresses or CIDRs) whose
@@ -72,6 +74,13 @@ type SeedCalendar struct {
 
 type Feed struct {
 	Token string `json:"token"`
+}
+
+// Backup is the daily copy of the data file.
+type Backup struct {
+	Time     string `json:"time"`      // daily at HH:MM local time (default 02:30); "off" turns the daily copy off
+	KeepDays int    `json:"keep_days"` // default 30
+	Dir      string `json:"dir"`       // default: "backups" next to the data file
 }
 
 type Digest struct {
@@ -173,6 +182,17 @@ func (c *Config) finish() error {
 		}
 		c.holidays[h] = true
 	}
+	if c.Backup.Time == "" {
+		c.Backup.Time = "02:30"
+	}
+	if c.Backup.Time != "off" {
+		if _, err := time.Parse("15:04", c.Backup.Time); err != nil {
+			errs = append(errs, `backup.time: want HH:MM, or "off"`)
+		}
+	}
+	if c.Backup.KeepDays <= 0 {
+		c.Backup.KeepDays = 30
+	}
 	switch c.Auth.AnonymousAccess {
 	case "":
 		c.Auth.AnonymousAccess = AnonymousNone
@@ -250,6 +270,14 @@ func RoleRank(role string) int {
 }
 
 func (c *Config) Location() *time.Location { return c.loc }
+
+// BackupDir is where backups go: backup.dir, or "backups" next to the data file.
+func (c *Config) BackupDir() string {
+	if c.Backup.Dir != "" {
+		return c.Backup.Dir
+	}
+	return filepath.Join(filepath.Dir(c.DataFile), "backups")
+}
 
 // TrustedProxy reports whether a is one of the configured reverse proxies.
 func (c *Config) TrustedProxy(a netip.Addr) bool {

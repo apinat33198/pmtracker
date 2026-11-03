@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/apinat33198/pmtracker/internal/auth"
+	"github.com/apinat33198/pmtracker/internal/backup"
 	"github.com/apinat33198/pmtracker/internal/config"
 	"github.com/apinat33198/pmtracker/internal/core"
 	"github.com/apinat33198/pmtracker/internal/demo"
@@ -65,7 +66,8 @@ func demoServerWith(t *testing.T, users []config.User, opts func(*Server)) env {
 	sy := &gcal.Syncer{Store: st, Source: src, Cfg: cfg, Now: now, Log: quiet}
 	sy.SyncAll(context.Background())
 	sy.SyncAll(context.Background())
-	s := &Server{Cfg: cfg, Store: st, Syncer: sy, Now: now, Log: quiet, Demo: true}
+	s := &Server{Cfg: cfg, Store: st, Syncer: sy, Now: now, Log: quiet, Demo: true,
+		Backups: &backup.Manager{Dir: filepath.Join(t.TempDir(), "backups"), KeepDays: 30, Store: st, Now: now, Loc: loc, Log: quiet}}
 	if opts != nil {
 		opts(s)
 	}
@@ -134,7 +136,7 @@ func TestPagesRender(t *testing.T) {
 	cat := e.store.Catalog()
 	paths := []string{"/", "/?region=South", "/?vendor=siamups&status=overdue", "/?system=crac", "/inbox", "/events", "/events?show=partial",
 		"/export.csv", "/digest.txt", "/forecast.ics?token=demo", "/admin/sites", "/admin/vendors", "/admin/systems",
-		"/admin/calendars", "/admin/import", "/admin/activity", "/admin/import/template.csv"}
+		"/admin/calendars", "/admin/import", "/admin/activity", "/admin/import/template.csv", "/admin/backups", "/admin/users"}
 	for _, s := range cat.Sites {
 		paths = append(paths, "/sites/"+s.ID, "/admin/sites/"+s.ID)
 	}

@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/apinat33198/pmtracker/internal/auth"
+	"github.com/apinat33198/pmtracker/internal/backup"
 	"github.com/apinat33198/pmtracker/internal/config"
 	"github.com/apinat33198/pmtracker/internal/core"
 	"github.com/apinat33198/pmtracker/internal/gcal"
@@ -43,6 +44,7 @@ type Server struct {
 	Log            *log.Logger
 	Demo           bool
 	ServiceAccount string
+	Backups        *backup.Manager
 
 	pages      map[string]*template.Template
 	secret     []byte
@@ -121,6 +123,11 @@ func (s *Server) Handler() (http.Handler, error) {
 	handle("POST /admin/import", a, s.adminImportPost)
 	handle("GET /admin/import/template.csv", a, s.adminImportTemplate)
 	handle("GET /admin/activity", a, s.adminActivity)
+	handle("GET /admin/backups", a, s.adminBackups)
+	handle("POST /admin/backups", a, s.adminBackupNow)
+	handle("GET /admin/backups/file/{name}", a, s.adminBackupFile)
+	handle("POST /admin/backups/restore", a, s.adminRestoreBackup)
+	handle("POST /admin/backups/upload", a, s.adminRestoreUpload)
 	handle("GET /admin/users", a, s.adminUsers)
 	handle("POST /admin/users", a, s.adminAddUser)
 	handle("POST /admin/users/{name}/role", a, s.adminSetRole)
@@ -135,29 +142,32 @@ func (s *Server) Handler() (http.Handler, error) {
 func (s *Server) parse() error {
 	loc := s.Cfg.Location()
 	funcs := template.FuncMap{
-		"date":      func(t time.Time) string { return fmtDate(t, "2 Jan 2006") },
-		"dateShort": func(t time.Time) string { return fmtDate(t, "Mon 2 Jan") },
-		"dm":        func(t time.Time) string { return fmtDate(t, "2 Jan") },
-		"dateTime":  func(t time.Time) string { return fmtDate(t.In(loc), "2 Jan 2006, 15:04") },
-		"iso":       func(t time.Time) string { return fmtDate(t, "2006-01-02") },
-		"ago":       func(t time.Time) string { return ago(t, s.Now()) },
-		"rel":       relDays,
-		"dueRel":    dueRel,
-		"dueShort":  dueShort,
-		"offset":    offsetText,
-		"fromToday": func(t time.Time) string { return relDays(core.DaysBetween(core.Day(s.Now(), loc), t)) },
-		"sinceDays": func(t time.Time) int { return core.DaysBetween(t, core.Day(s.Now(), loc)) },
-		"plural":    plural,
-		"join":      strings.Join,
-		"has":       func(list []string, v string) bool { return slices.Contains(list, v) },
-		"ribbon":    func(f core.Forecast) template.HTML { return forecastSVG(f, rowRibbon) },
-		"bigRibbon": func(f core.Forecast) template.HTML { return forecastSVG(f, assetRibbon) },
-		"axis":      axisSVG,
-		"add":       func(a, b int) int { return a + b },
-		"taskLabel": func(cat *core.Catalog, id string) string { return cat.TaskLabel(id) },
-		"statuses":  func() []core.Status { return core.AllStatuses },
-		"count":     func(m map[core.Status]int, s string) int { return m[core.Status(s)] },
-		"newVendor": func() string { return newVendorOption },
+		"date":       func(t time.Time) string { return fmtDate(t, "2 Jan 2006") },
+		"dateShort":  func(t time.Time) string { return fmtDate(t, "Mon 2 Jan") },
+		"dm":         func(t time.Time) string { return fmtDate(t, "2 Jan") },
+		"dateTime":   func(t time.Time) string { return fmtDate(t.In(loc), "2 Jan 2006, 15:04") },
+		"iso":        func(t time.Time) string { return fmtDate(t, "2006-01-02") },
+		"ago":        func(t time.Time) string { return ago(t, s.Now()) },
+		"rel":        relDays,
+		"dueRel":     dueRel,
+		"dueShort":   dueShort,
+		"offset":     offsetText,
+		"fromToday":  func(t time.Time) string { return relDays(core.DaysBetween(core.Day(s.Now(), loc), t)) },
+		"sinceDays":  func(t time.Time) int { return core.DaysBetween(t, core.Day(s.Now(), loc)) },
+		"plural":     plural,
+		"join":       strings.Join,
+		"has":        func(list []string, v string) bool { return slices.Contains(list, v) },
+		"ribbon":     func(f core.Forecast) template.HTML { return forecastSVG(f, rowRibbon) },
+		"bigRibbon":  func(f core.Forecast) template.HTML { return forecastSVG(f, assetRibbon) },
+		"axis":       axisSVG,
+		"add":        func(a, b int) int { return a + b },
+		"taskLabel":  func(cat *core.Catalog, id string) string { return cat.TaskLabel(id) },
+		"statuses":   func() []core.Status { return core.AllStatuses },
+		"count":      func(m map[core.Status]int, s string) int { return m[core.Status(s)] },
+		"newVendor":  func() string { return newVendorOption },
+		"size":       sizeText,
+		"backupKind": backupKind,
+		"backupWhen": backupWhen,
 		"tel": func(s string) string {
 			return strings.Map(func(r rune) rune {
 				if r == '+' || (r >= '0' && r <= '9') {

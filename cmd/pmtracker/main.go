@@ -27,6 +27,7 @@ import (
 	_ "time/tzdata" // the binary works on hosts without zoneinfo
 
 	"github.com/apinat33198/pmtracker/internal/auth"
+	"github.com/apinat33198/pmtracker/internal/backup"
 	"github.com/apinat33198/pmtracker/internal/config"
 	"github.com/apinat33198/pmtracker/internal/core"
 	"github.com/apinat33198/pmtracker/internal/demo"
@@ -237,7 +238,15 @@ func run(cmd, cfgPath string, demoMode, keep bool, addr, dataPath, todayFlag str
 		}()
 	}
 
-	srv := &web.Server{Cfg: cfg, Store: st, Syncer: syncer, Now: now, Log: logger, Demo: demoMode, ServiceAccount: saMail}
+	backups := &backup.Manager{Dir: cfg.BackupDir(), KeepDays: cfg.Backup.KeepDays, Store: st, Now: now, Loc: cfg.Location(), Log: logger}
+	if demoMode {
+		backups.Dir = filepath.Join(os.TempDir(), "pmtracker-demo-backups")
+	}
+	if cfg.Backup.Time != "off" {
+		go backups.Run(ctx, cfg.Backup.Time)
+	}
+
+	srv := &web.Server{Cfg: cfg, Store: st, Syncer: syncer, Now: now, Log: logger, Demo: demoMode, ServiceAccount: saMail, Backups: backups}
 	h, err := srv.Handler()
 	if err != nil {
 		return err

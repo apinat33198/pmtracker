@@ -163,6 +163,8 @@ func (s *Server) authenticate(next http.Handler) http.Handler {
 		switch path {
 		case "/admin/import":
 			limit = 6 << 20
+		case "/admin/backups/upload":
+			limit = 64 << 20
 		case "/login", "/setup":
 			limit = 64 << 10
 		}

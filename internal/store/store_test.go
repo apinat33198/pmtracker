@@ -119,3 +119,51 @@ func TestUpdateCatalogCleansUp(t *testing.T) {
 		t.Errorf("audit = %+v", a)
 	}
 }
+
+func TestExportAndRestore(t *testing.T) {
+	s, _ := Open(filepath.Join(t.TempDir(), "d.json"))
+	secret, _ := s.SessionSecret()
+	s.UpdateCatalog("admin", "Set up", func(c *core.Catalog) error {
+		c.Sites = []core.Site{{ID: "bkk1", Code: "BKK1", Name: "Bang Na"}}
+		return nil
+	})
+	b, err := s.Export()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(b), "session_secret") {
+		t.Error("backups must not carry the session signing key")
+	}
+	s.UpdateCatalog("admin", "Oops", func(c *core.Catalog) error { c.Sites = nil; return nil })
+	if err := s.Restore(b, "admin", "Restored"); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := s.Catalog().Site("bkk1"); !ok {
+		t.Error("restore should bring the site back")
+	}
+	if got, _ := s.SessionSecret(); string(got) != string(secret) {
+		t.Error("restore should keep the current signing key")
+	}
+	if a := s.Audit(1); len(a) == 0 || a[0].Action != "Restored" {
+		t.Error("restore should be in the activity log")
+	}
+	// The restored state is what's on disk.
+	s2, _ := Open(s.path)
+	if _, ok := s2.Catalog().Site("bkk1"); !ok {
+		t.Error("restore wasn't saved")
+	}
+	for name, bad := range map[string]string{
+		"not json":       "hello",
+		"other json":     `{"foo": 1}`,
+		"no version":     `{"catalog": {}}`,
+		"newer version":  `{"version": 99}`,
+		"broken catalog": `{"version": 2, "catalog": {"tasks": [{"id": "t1", "site_id": "nope"}]}}`,
+	} {
+		if err := s.Restore([]byte(bad), "x", "x"); err == nil {
+			t.Errorf("%s: restore should refuse it", name)
+		}
+	}
+	if _, ok := s.Catalog().Site("bkk1"); !ok {
+		t.Error("a refused restore must leave the data alone")
+	}
+}

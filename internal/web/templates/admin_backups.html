@@ -1,0 +1,46 @@
+{{define "content"}}{{$d := .Data}}
+{{template "adminnav" "backups"}}
+<section class="page-head with-tools">
+  <div>
+    <h1>Backups</h1>
+    <p class="lede">{{if eq $d.Time "off"}}Daily backups are turned off (<code>backup.time</code> is <code>"off"</code> in the config).{{else}}Everything is copied every day at {{$d.Time}}: sites, tasks, vendors, visits, inbox decisions, users and the activity log. Copies are kept for {{$d.KeepDays}} days.{{end}}</p>
+    <p class="hint small">They're stored on the tracker's server in <code>{{$d.Dir}}</code>. Download one now and then and keep it somewhere else, so losing the server doesn't take the backups with it.</p>
+  </div>
+  <form method="post" action="/admin/backups"><button>Back up now</button></form>
+</section>
+{{with $d.LastErr}}<p class="flash error" role="alert">The last backup failed: {{.}}</p>{{end}}
+
+<table class="plain backups">
+  <thead><tr><th scope="col">Backup</th><th scope="col">Size</th><th scope="col"><span class="vh">Actions</span></th></tr></thead>
+  <tbody>
+  {{range $i, $f := $d.Files}}
+    <tr>
+      <td data-label="Backup"><span class="strong">{{backupWhen $f}}</span><span class="sub">{{backupKind $f.Kind}}{{if eq $i 0}} · newest{{end}}</span></td>
+      <td data-label="Size">{{size $f.Size}}</td>
+      <td class="actions">
+        <a class="button ghost" href="/admin/backups/file/{{$f.Name}}" download>Download</a>
+        <details class="row-menu">
+          <summary>Restore…</summary>
+          <form method="post" action="/admin/backups/restore">
+            <input type="hidden" name="name" value="{{$f.Name}}">
+            <span class="field-hint">Replaces all current data with this backup. A copy of the current data is saved first.</span>
+            <label class="stack"><span>Type <b>restore</b> to confirm</span> <input name="confirm" autocomplete="off" required></label>
+            <button class="danger-button">Restore this backup</button>
+          </form>
+        </details>
+      </td>
+    </tr>
+  {{else}}
+    <tr><td colspan="3" class="empty">No backups yet. The first one is made when the tracker starts{{if ne $d.Time "off"}} and then every day at {{$d.Time}}{{end}}, or press Back up now.</td></tr>
+  {{end}}
+  </tbody>
+</table>
+
+<h2>Restore from a file</h2>
+<form class="danger" method="post" action="/admin/backups/upload" enctype="multipart/form-data">
+  <p>For moving to a new server or recovering after a loss: upload a backup downloaded from this page (<code>.json.gz</code>), or a copy of the data file (<code>.json</code>). This replaces all current data; a copy of the current data is saved first.</p>
+  <label class="stack">Backup file <input type="file" name="file" accept=".gz,.json" required></label>
+  <label class="stack"><span>Type <b>restore</b> to confirm</span> <input name="confirm" autocomplete="off" required></label>
+  <button class="danger-button">Restore from this file</button>
+</form>
+{{end}}

@@ -225,6 +225,36 @@ example value or a token shorter than 24 characters.
 password and restart, sign in as them, and set a new password for your
 account under Admin, Users.
 
+## Backups
+
+Everything (sites, tasks, vendors, visits, inbox decisions, users, activity) is
+copied every day at 02:30 into `backups/` next to the data file
+(`/var/lib/pmtracker/backups` on a server), compressed, readable by the
+service only, and kept for 30 days. A copy missed while the tracker was off is
+made when it starts.
+
+Under **Admin, Backups** an admin can make a copy now, download one, restore
+one (type `restore` to confirm; the current data is saved as a
+"before restore" copy first), or restore an uploaded file, which is also how to
+move the tracker to a new server.
+
+Backups don't contain the key that signs sign-in cookies, but they do contain
+password hashes, so keep downloaded copies private. Downloads are recorded
+under Admin, Activity.
+
+```json
+"backup": {"time": "02:30", "keep_days": 30, "dir": ""}
+```
+
+`time` can be `"off"`. To keep copies off the server, download one now and then,
+or set `dir` to a mounted share. In a Proxmox container, add it as a mount
+point, then let the service write there with `systemctl edit pmtracker`:
+
+```ini
+[Service]
+ReadWritePaths=/mnt/pm-backups
+```
+
 ## Deploy
 
 Proxmox LXC or any Linux host: `deploy/pmtracker.service` has the install
