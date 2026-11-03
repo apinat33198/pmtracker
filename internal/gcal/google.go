@@ -39,6 +39,20 @@ const ReadOnlyScope = "https://www.googleapis.com/auth/calendar.events.readonly"
 // the caller must wipe that calendar's mirror and do a full sync.
 var ErrSyncTokenGone = errors.New("sync token invalidated by Google (410 Gone)")
 
+// Disconnected is the Source used until a service-account key is set up.
+type Disconnected struct{ KeyFile string }
+
+func (d Disconnected) Err() error {
+	if d.KeyFile == "" {
+		return errors.New("Google Calendar isn't connected: set google.credentials_file in the config file and restart")
+	}
+	return fmt.Errorf("Google Calendar isn't connected yet: put the service-account key at %s and restart", d.KeyFile)
+}
+
+func (d Disconnected) List(context.Context, string, string, time.Time) ([]core.Event, string, error) {
+	return nil, "", d.Err()
+}
+
 // Source lists a calendar's events: a full listing when syncToken is empty
 // (from timeMin onward), otherwise only changes since the token.
 type Source interface {

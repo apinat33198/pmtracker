@@ -224,3 +224,10 @@ func TestFailedResyncKeepsTheMirror(t *testing.T) {
 		t.Errorf("a failed re-read after 410 emptied the mirror: %d events", n)
 	}
 }
+
+func TestDisconnected(t *testing.T) {
+	_, _, err := Disconnected{KeyFile: "/etc/pmtracker/service-account.json"}.List(context.Background(), "x", "", time.Time{})
+	if err == nil || !strings.Contains(err.Error(), "/etc/pmtracker/service-account.json") {
+		t.Errorf("err = %v", err)
+	}
+}

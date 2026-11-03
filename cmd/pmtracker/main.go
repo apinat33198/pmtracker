@@ -96,14 +96,21 @@ func run(cmd, cfgPath string, demoMode, keep bool, addr, dataPath, todayFlag str
 		if cfg, err = config.Load(cfgPath); err != nil {
 			return err
 		}
-		if cfg.Google.CredentialsFile == "" {
-			return errors.New("config: google.credentials_file is required")
+		// Without a service-account key the tracker still runs: sites, tasks,
+		// users and visits typed in by hand work, and calendars sync once the
+		// key is in place.
+		keyFile := cfg.Google.CredentialsFile
+		if _, statErr := os.Stat(keyFile); keyFile == "" || errors.Is(statErr, os.ErrNotExist) {
+			d := gcal.Disconnected{KeyFile: keyFile}
+			logger.Print(d.Err())
+			src = d
+		} else {
+			g, err := gcal.NewGoogle(keyFile, cfg.Location())
+			if err != nil {
+				return err
+			}
+			src, saMail = g, g.ClientEmail()
 		}
-		g, err := gcal.NewGoogle(cfg.Google.CredentialsFile, cfg.Location())
-		if err != nil {
-			return err
-		}
-		src, saMail = g, g.ClientEmail()
 	}
 	if addr != "" {
 		cfg.Listen = addr

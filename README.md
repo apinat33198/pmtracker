@@ -244,6 +244,16 @@ needs it; without it the service fails with `status=226/NAMESPACE`. The
 clock comes from the Proxmox host, so keep NTP running there. Proxmox backups
 of the container include the data file.
 
+**The quick way:** from your Mac, in this folder, run
+`deploy/install.sh root@<container IP> pm.example.com`. It sets up SSH key
+login (asks for the root password once), writes `config.json`, builds,
+installs the service, sets up the Cloudflare Tunnel (you approve one login
+link in the browser) and prints the link for creating the first admin. Put
+`service-account.json` here first if you have it; without it the tracker
+runs and syncs calendars once the key is added (run the script again).
+
+The same by hand:
+
 1. In `config.json`: `"listen": "127.0.0.1:8080"` so nothing reaches the
    tracker except through the tunnel, `"public_url": "https://pm.example.com"`,
    `"data_file": "/var/lib/pmtracker/data.json"`. Leave `trusted_proxies` at

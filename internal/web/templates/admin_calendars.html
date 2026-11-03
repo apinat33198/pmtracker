@@ -2,7 +2,7 @@
 {{template "adminnav" "calendars"}}
 <section class="page-head">
   <h1>Calendars and sync</h1>
-  <p class="lede">Google calendars the tracker reads every {{.Cfg.SyncIntervalMinutes}} minutes.{{with $d.ServiceAccount}} Share each one with <code>{{.}}</code> and give it “See all event details”.{{end}}</p>
+  <p class="lede">Google calendars the tracker reads every {{.Cfg.SyncIntervalMinutes}} minutes.{{with $d.ServiceAccount}} Share each one with <code>{{.}}</code> and give it “See all event details”.{{else}} Google Calendar isn't connected yet: put the service-account key where <code>google.credentials_file</code> in the config points and restart the service.{{end}}</p>
 </section>
 
 <div class="edit-list">
