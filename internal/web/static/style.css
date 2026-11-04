@@ -532,3 +532,12 @@ h2 .h-link { font-size: 13px; font-weight: 500; margin-left: 10px; }
   .jobs .row-menu[open] { display: block; }
   .jobs .row-menu > form:first-of-type { min-width: 0; }
 }
+
+/* Edit rows (Systems, Calendars): inputs line up with the buttons, and every
+   system row has the same parts (Delete is greyed out while the system is in
+   use), so the columns line up from row to row. */
+.edit-row label.stack { margin-bottom: 0; }
+.edit-row.two .row-actions .sub { min-width: 58px; text-align: right; margin-right: 0; }
+@media (max-width: 960px) {
+  .edit-row.two .row-actions .sub { text-align: left; }
+}

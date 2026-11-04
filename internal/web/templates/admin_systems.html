@@ -14,7 +14,7 @@
     <div class="row-actions">
       <span class="sub">{{index $d.Used .Key}} {{plural (index $d.Used .Key) "task" "tasks"}}</span>
       <button>Save</button>
-      {{if not (index $d.Used .Key)}}<button class="ghost" formaction="/admin/systems/delete">Delete</button>{{end}}
+      {{with index $d.Used .Key}}<button class="ghost" type="button" disabled title="Used by {{.}} PM {{plural . "task" "tasks"}}: move or delete them first">Delete</button>{{else}}<button class="ghost" formaction="/admin/systems/delete">Delete</button>{{end}}
     </div>
   </form>
 {{end}}
