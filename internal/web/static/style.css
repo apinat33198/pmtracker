@@ -296,6 +296,7 @@ table.matrix { border: 0; border-radius: 0; min-width: 640px; }
 }
 .cell::before { content: ""; position: absolute; left: 7px; top: 50%; width: 4px; height: 4px; margin-top: -2px; border-radius: 50%; background: var(--sc); opacity: .6; }
 .cell:hover { outline: 2px solid var(--sc); outline-offset: -2px; }
+.cell-task { display: none; } /* the column header names it on computers */
 .cell-date { display: block; font-weight: 650; font-size: 13px; }
 .cell-note { display: block; font-size: 11.5px; color: var(--sc); font-weight: 600; }
 .cell.dim { opacity: .28; }
@@ -461,7 +462,15 @@ a.wide-link { display: block; text-align: center; word-break: break-all; }
   .matrix td.m-last::before { display: inline; content: attr(data-label) ":"; font-weight: 400; color: var(--ink-2); font-size: 13px; }
   .matrix td.m-last .sub { display: inline; font-weight: 400; }
   .matrix td.m-cell { min-width: 0; }
-  .matrix td.m-cell::before { content: attr(data-label); display: block; color: var(--ink-2); font-size: 12px; font-weight: 600; margin-bottom: 3px; }
+  /* Each tile carries its task name as a heading: name on top, then the
+     date and how far off it is beside it (the status drops below as a
+     whole when it doesn't fit). The column labels aren't needed. */
+  .matrix td.m-cell::before { content: none; display: none; }
+  .matrix .cell { padding: 7px 10px 8px 18px; margin: 0 0 6px; }
+  .matrix .cell::before { top: 15px; margin-top: 0; }
+  .matrix .cell-task { display: block; font-size: 14px; font-weight: 700; color: var(--ink); line-height: 1.3; margin-bottom: 2px; overflow-wrap: anywhere; }
+  .matrix .cell-date { display: inline-block; font-size: 13px; font-weight: 600; color: var(--ink-2); margin-right: 7px; }
+  .matrix .cell-note { display: inline-block; font-size: 12.5px; }
   .matrix td.m-empty { display: none; }
   .matrix tr.region { padding: 0; border: 0; }
   .matrix tr.region th { display: block; background: none; border: 0; padding: 18px 2px 8px; font-size: 14px; }

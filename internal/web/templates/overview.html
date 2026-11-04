@@ -34,9 +34,10 @@
     <tr>
       <th scope="row" class="m-site"><a href="/sites/{{.Site.ID}}"><i class="dot s-{{.Worst}}" title="{{.Worst.Label}}"></i><b>{{.Site.Code}}</b><span>{{.Site.Name}}</span></a></th>
       <td class="m-last" data-label="Last PM">{{if .LastPM.IsZero}}<span class="sub">None</span>{{else}}{{dm .LastPM}}<span class="sub">{{sinceDays .LastPM}} days ago</span>{{end}}</td>
-      {{range $d.Systems}}{{$cell := index $ss.Cells .Key}}
+      {{range $d.Systems}}{{$cell := index $ss.Cells .Key}}{{$task := .Name}}
       <td class="m-cell{{if not $cell}} m-empty{{end}}" data-label="{{.Name}}">{{range $cell}}
         <a class="cell s-{{.Status}}{{if and $d.Status (ne (print .Status) $d.Status)}} dim{{end}}" href="/tasks/{{.Task.ID}}" title="{{$cat.VendorName .Task.Vendor}}: {{.Status.Label}}{{if .HasDue}}, due {{date .NextDue}}{{end}}{{with .Booked}}, booked {{date .Date}}{{end}}">
+          <span class="cell-task">{{$task}}</span>
           <span class="cell-date">{{if .Booked}}{{dm .Booked.Date}}{{else if .HasDue}}{{dm .NextDue}}{{else}}No date{{end}}</span>
           <span class="cell-note">{{if eq .Status "booked"}}Booked{{else if eq .Status "off_cycle"}}Booked, off-cycle{{else if eq .Status "no_history"}}No history{{else}}{{dueShort .DaysLeft}}{{end}}{{if gt (len $cell) 1}}, {{$cat.VendorName .Task.Vendor}}{{end}}</span>
         </a>{{else}}<span class="none" aria-label="No task">–</span>{{end}}
