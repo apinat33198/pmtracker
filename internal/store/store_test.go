@@ -353,3 +353,76 @@ func TestJobs(t *testing.T) {
 		}
 	}
 }
+
+// Found in testing: a backup with a stale next_id restored fine, so the next
+// new job reused an old job's number and deleting it deleted the old job.
+func TestRestoreChecksJobsAndNumbers(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "d.json")
+	s, _ := Open(path)
+	s.UpdateCatalog("t", "", func(c *core.Catalog) error {
+		c.Sites = []core.Site{{ID: "bkk1", Code: "BKK1", Name: "Bang Na"}}
+		return nil
+	})
+	s.AddJob(core.Job{SiteID: "bkk1", Title: "Real job", Date: "2026-11-04"}, "x")
+	b, _ := s.Export()
+	craft := func(mod func(m map[string]any)) []byte {
+		var m map[string]any
+		json.Unmarshal(b, &m)
+		mod(m)
+		out, _ := json.Marshal(m)
+		return out
+	}
+	bad := map[string][]byte{
+		"invalid job": craft(func(m map[string]any) {
+			m["jobs"] = append(m["jobs"].([]any), map[string]any{"id": 9, "site_id": "bkk1", "title": "x", "date": "nonsense", "status": "open"})
+		}),
+		"duplicate number": craft(func(m map[string]any) {
+			m["jobs"] = append(m["jobs"].([]any), map[string]any{"id": 1, "site_id": "bkk1", "title": "Twin", "date": "2026-11-04", "status": "open"})
+		}),
+	}
+	for name, data := range bad {
+		if err := s.Restore(data, "admin", "restore"); err == nil || !strings.Contains(err.Error(), "ad-hoc jobs") {
+			t.Errorf("%s: restore = %v, want refused", name, err)
+		}
+	}
+	if err := s.Restore(craft(func(m map[string]any) { m["next_id"] = 1 }), "admin", "restore"); err != nil {
+		t.Fatal(err)
+	}
+	j, _ := s.AddJob(core.Job{SiteID: "bkk1", Title: "New job", Date: "2026-11-04"}, "x")
+	if gone, _ := s.DeleteJob(j.ID, "admin", func(core.Job) string { return "del" }); gone.Title != "New job" {
+		t.Errorf("deleting the new job removed %q", gone.Title)
+	}
+	if jobs := s.Inputs().Jobs; len(jobs) != 1 || jobs[0].Title != "Real job" {
+		t.Errorf("left = %+v", jobs)
+	}
+	// A hand-edited data file is fixed the same way when it's opened.
+	raw, _ := os.ReadFile(path)
+	os.WriteFile(path, []byte(strings.Replace(string(raw), `"next_id": `, `"next_id": 0, "x_": `, 1)), 0o600)
+	var st map[string]any
+	json.Unmarshal(raw, &st)
+	st["next_id"] = 1
+	edited, _ := json.Marshal(st)
+	os.WriteFile(path, edited, 0o600)
+	s2, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if j2, _ := s2.AddJob(core.Job{SiteID: "bkk1", Title: "Another", Date: "2026-11-04"}, "x"); j2.ID <= 1 {
+		t.Errorf("a stale next_id on disk gave ID %d", j2.ID)
+	}
+}
+
+func TestActivityEntriesAreOneLine(t *testing.T) {
+	s, _ := Open(filepath.Join(t.TempDir(), "d.json"))
+	var copied []AuditEntry
+	s.Activity().OnAppend = func(e AuditEntry) { copied = append(copied, e) }
+	s.LogFrom("ad\nmin", "10.0.0.1\r\n", "Added system Battery\n2026/11/04 19:00:00 activity: forged\u2028line \u202eevil")
+	got, _ := s.Activity().Recent(1)
+	want := "Added system Battery 2026/11/04 19:00:00 activity: forged line  evil"
+	if len(got) != 1 || got[0].Action != want || got[0].By != "ad min" || got[0].From != "10.0.0.1  " {
+		t.Errorf("stored = %+v", got)
+	}
+	if len(copied) != 1 || copied[0].Action != want {
+		t.Errorf("server-log copy = %+v", copied)
+	}
+}

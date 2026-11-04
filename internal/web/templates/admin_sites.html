@@ -46,8 +46,8 @@
       {{range $d.TaskSystems}}
         <tr>
           <td data-label="System">{{.Name}}</td>
-          <td data-label="Vendor">{{template "vendorSelect" (dict "Name" (printf "vendor_%s" .Key) "NewName" (printf "newvendor_%s" .Key) "ID" (printf "nv-%s" .Key) "Selected" "" "Cat" $cat "Empty" "Not at this site")}}</td>
-          <td data-label="Last PM date"><input type="date" name="last_{{.Key}}"></td>
+          <td data-label="Vendor">{{template "vendorSelect" (dict "Name" (printf "vendor_%s" .Key) "NewName" (printf "newvendor_%s" .Key) "ID" (printf "nv-%s" .Key) "Selected" "" "Cat" $cat "Empty" "Not at this site" "Label" (printf "Vendor for %s" .Name))}}</td>
+          <td data-label="Last PM date"><input type="date" name="last_{{.Key}}" aria-label="Last PM date for {{.Name}}"></td>
         </tr>
       {{end}}
       </tbody>

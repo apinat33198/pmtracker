@@ -275,6 +275,37 @@ func (c *Catalog) EnsureVendor(name string) (v Vendor, created bool, err error) 
 	return v, true, nil
 }
 
+// Tidy puts names on one line: line breaks, tabs and repeated spaces in
+// codes, names, other names and contact fields become single spaces, and
+// empty other names are dropped. Notes keep their line breaks.
+func (c *Catalog) Tidy() {
+	list := func(xs []string) []string {
+		var out []string
+		for _, x := range xs {
+			if x = oneLine(x); x != "" {
+				out = append(out, x)
+			}
+		}
+		return out
+	}
+	for i := range c.Sites {
+		s := &c.Sites[i]
+		s.Code, s.Name, s.Region, s.Aliases = oneLine(s.Code), oneLine(s.Name), oneLine(s.Region), list(s.Aliases)
+	}
+	for i := range c.Systems {
+		s := &c.Systems[i]
+		s.Name, s.Aliases = oneLine(s.Name), list(s.Aliases)
+	}
+	for i := range c.Vendors {
+		v := &c.Vendors[i]
+		v.Name, v.Contact, v.Phone, v.Email = oneLine(v.Name), oneLine(v.Contact), oneLine(v.Phone), oneLine(v.Email)
+		v.Aliases, v.Domains = list(v.Aliases), list(v.Domains)
+	}
+	for i := range c.Calendars {
+		c.Calendars[i].Label = oneLine(c.Calendars[i].Label)
+	}
+}
+
 // MaxSystemName bounds a system's name: it's a column heading on the overview.
 const MaxSystemName = 80
 

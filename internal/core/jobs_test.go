@@ -22,6 +22,9 @@ func TestJobClean(t *testing.T) {
 		{SiteID: "bkk1", Title: strings.Repeat("ก", MaxJobTitle+1), Date: "2026-11-04"}, // too long
 		{SiteID: "bkk1", Title: "x", Date: "2026-11-04", Status: JobDone},               // done, no date
 		{SiteID: "bkk1", Title: "x", Date: "2026-11-04", Status: "maybe"},               // unknown status
+		{SiteID: "bkk1", Title: "\u200b\u200b", Date: "2026-11-04"},                     // nothing visible
+		{SiteID: "bkk1", Title: "x", Date: "0026-11-04"},                                // mistyped year
+		{SiteID: "bkk1", Title: "x", Date: "2026-11-04", Status: JobDone, DoneOn: "2206-01-01"},
 	}
 	for _, b := range bad {
 		if err := b.Clean(); err == nil {
@@ -85,5 +88,19 @@ func TestBuildJobs(t *testing.T) {
 	if !strings.Contains(d, "Ad-hoc jobs due (2)") || !strings.Contains(d, "• BKK1 Replace tiles: 3 days late") ||
 		!strings.Contains(d, "• BKK1 Repair raised floor: today (Siam Floor Works)") || strings.Contains(d, "door reader") {
 		t.Errorf("digest should list jobs due today or late, not later ones:\n%s", d)
+	}
+}
+
+func TestCatalogTidy(t *testing.T) {
+	c := testCatalog()
+	c.Sites[0].Name = "Bang\nNa  "
+	c.Sites[0].Aliases = []string{" บางนา ", "", "\t"}
+	c.Systems[0].Name = "DC\r\npower"
+	c.Vendors[0].Contact = "Khun\u202e Arthit"
+	c.Calendars[0].Label = "PM\t– Vendors"
+	c.Tidy()
+	if c.Sites[0].Name != "Bang Na" || len(c.Sites[0].Aliases) != 1 || c.Sites[0].Aliases[0] != "บางนา" ||
+		c.Systems[0].Name != "DC power" || c.Vendors[0].Contact != "Khun Arthit" || c.Calendars[0].Label != "PM – Vendors" {
+		t.Errorf("tidied = %+v %+v %+v %+v", c.Sites[0], c.Systems[0], c.Vendors[0], c.Calendars[0])
 	}
 }

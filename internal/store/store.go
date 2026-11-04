@@ -126,9 +126,38 @@ func (st *state) normalize() {
 	if st.Marks == nil {
 		st.Marks = map[string]core.VisitMark{}
 	}
-	if st.NextID == 0 {
-		st.NextID = 1
+	// The next number must be past every one in use, or a new visit, rule
+	// or job would share a number with an old one (a hand-edited file or
+	// backup), and deleting one would delete the other.
+	high := 0
+	for _, r := range st.Rules {
+		high = max(high, r.ID)
 	}
+	for _, m := range st.Manual {
+		high = max(high, m.ID)
+	}
+	for _, j := range st.Jobs {
+		high = max(high, j.ID)
+	}
+	if st.NextID <= high {
+		st.NextID = high + 1
+	}
+}
+
+// checkJobs reports the first ad-hoc job in a backup that doesn't check out.
+func checkJobs(jobs []core.Job) error {
+	seen := map[int]bool{}
+	for i := range jobs {
+		j := &jobs[i]
+		if j.ID < 1 || seen[j.ID] {
+			return fmt.Errorf("two ad-hoc jobs share the number %d", j.ID)
+		}
+		seen[j.ID] = true
+		if err := j.Clean(); err != nil {
+			return fmt.Errorf("ad-hoc job #%d: %v", j.ID, err)
+		}
+	}
+	return nil
 }
 
 // Export returns everything as JSON for a backup, without the key that
@@ -161,6 +190,9 @@ func (s *Store) Restore(b []byte, by, action string) error {
 	}
 	if err := st.Catalog.Validate(); err != nil {
 		return fmt.Errorf("the backup's sites and tasks don't check out: %v", err)
+	}
+	if err := checkJobs(st.Jobs); err != nil {
+		return fmt.Errorf("the backup's ad-hoc jobs don't check out: %v", err)
 	}
 	st.normalize()
 	s.mu.Lock()
@@ -270,6 +302,7 @@ func (s *Store) UpdateCatalog(by, action string, fn func(*core.Catalog) error) e
 	if err := fn(&c); err != nil {
 		return err
 	}
+	c.Tidy()
 	if err := c.Validate(); err != nil {
 		return err
 	}

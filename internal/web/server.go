@@ -552,6 +552,7 @@ func (s *Server) feed(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	w.Header().Set("Cache-Control", "private, no-store")
 	w.Header().Set("Content-Type", "text/calendar; charset=utf-8")
 	w.Write([]byte(core.ForecastICS(s.Cfg, s.snapshot(), s.Now())))
 }

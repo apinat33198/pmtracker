@@ -47,7 +47,7 @@
      first option; empty means a vendor is required). */}}
 {{define "vendorSelect"}}
 <span class="vendor-pick">
-  <select name="{{.Name}}" data-new-box="{{.ID}}" aria-label="Vendor"{{if not .Empty}} required{{end}}>
+  <select name="{{.Name}}" data-new-box="{{.ID}}" aria-label="{{with .Label}}{{.}}{{else}}Vendor{{end}}"{{if not .Empty}} required{{end}}>
     {{with .Empty}}<option value="">{{.}}</option>{{end}}
     {{range .Cat.Vendors}}<option value="{{.Key}}"{{if eq .Key $.Selected}} selected{{end}}>{{.Name}}</option>{{end}}
     <option value="{{newVendor}}">Add a new vendor…</option>

@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 )
 
 // ActivityLog is the record of who did what. It is kept apart from the data
@@ -61,6 +62,10 @@ func (a *ActivityLog) KeepDays() int {
 func (a *ActivityLog) Append(entries ...AuditEntry) error {
 	if len(entries) == 0 {
 		return nil
+	}
+	entries = append([]AuditEntry(nil), entries...)
+	for i := range entries {
+		entries[i].By, entries[i].From, entries[i].Action = flat(entries[i].By), flat(entries[i].From), flat(entries[i].Action)
 	}
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -116,6 +121,26 @@ func (a *ActivityLog) appendDay(day string, entries []AuditEntry) error {
 		return fmt.Errorf("activity log: %w", err)
 	}
 	return nil
+}
+
+// flat makes text safe for a one-line log entry: line breaks, other control
+// characters and text-direction overrides become spaces. Without this, a
+// name with a line break in it would forge extra lines in the server log copy.
+func flat(s string) string {
+	if strings.IndexFunc(s, unsafeInLog) < 0 {
+		return s
+	}
+	return strings.Map(func(r rune) rune {
+		if unsafeInLog(r) {
+			return ' '
+		}
+		return r
+	}, s)
+}
+
+func unsafeInLog(r rune) bool {
+	return unicode.IsControl(r) || r == '\u2028' || r == '\u2029' ||
+		(r >= '\u202a' && r <= '\u202e') || (r >= '\u2066' && r <= '\u2069')
 }
 
 // SetKeepDays changes the retention period and deletes what's now too old.

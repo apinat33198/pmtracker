@@ -80,7 +80,7 @@ func jobLabel(cat core.Catalog, j core.Job) string {
 	if site, ok := cat.Site(j.SiteID); ok {
 		code = site.Code
 	}
-	return fmt.Sprintf("%q at %s", j.Title, code)
+	return fmt.Sprintf("“%s” at %s", j.Title, code)
 }
 
 func (s *Server) addJob(w http.ResponseWriter, r *http.Request) {

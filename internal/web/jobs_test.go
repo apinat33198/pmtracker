@@ -29,7 +29,7 @@ func TestJobsFlow(t *testing.T) {
 
 	add := url.Values{"site": {"bkk1"}, "title": {"Repair raised floor"}, "date": {"2026-11-03"}, "who": {"Siam Floor Works"},
 		"note": {"Quote QT-118"}, "back": {"/sites/bkk1"}}
-	if msg := post(t, e, "/jobs", add); msg != `Added "Repair raised floor" at BKK1.` {
+	if msg := post(t, e, "/jobs", add); msg != `Added “Repair raised floor” at BKK1.` {
 		t.Errorf("add = %q", msg)
 	}
 	jobs := e.store.Inputs().Jobs
@@ -56,7 +56,7 @@ func TestJobsFlow(t *testing.T) {
 		t.Errorf("digest should list the job due today:\n%s", d)
 	}
 
-	if msg := post(t, e, "/jobs/"+id+"/done", url.Values{}); msg != `Marked "Repair raised floor" at BKK1 as done.` {
+	if msg := post(t, e, "/jobs/"+id+"/done", url.Values{}); msg != `Marked “Repair raised floor” at BKK1 as done.` {
 		t.Errorf("done = %q", msg)
 	}
 	if j := e.store.Inputs().Jobs[0]; j.Status != "done" || j.DoneOn != "2026-11-03" || j.DoneBy != "admin" {
@@ -101,7 +101,7 @@ func TestJobsFlow(t *testing.T) {
 		acts = append(acts, a.Action)
 	}
 	log := strings.Join(acts, "\n")
-	for _, w := range []string{`Added the ad-hoc job "Repair raised floor" at BKK1 for 3 Nov 2026`, `Marked as done the ad-hoc job`, `Reopened the ad-hoc job`, `Deleted the ad-hoc job "Repair raised floor, row C" at BKK1`} {
+	for _, w := range []string{`Added the ad-hoc job “Repair raised floor” at BKK1 for 3 Nov 2026`, `Marked as done the ad-hoc job`, `Reopened the ad-hoc job`, `Deleted the ad-hoc job “Repair raised floor, row C” at BKK1`} {
 		if !strings.Contains(log, w) {
 			t.Errorf("activity log is missing %q:\n%s", w, log)
 		}
@@ -175,4 +175,39 @@ func TestJobsRoles(t *testing.T) {
 	if _, body, _ := req(t, "GET", u+"/sites/bkk1", "v", nil); strings.Contains(body, `action="/jobs`) {
 		t.Error("viewers get no job forms on the site page")
 	}
+}
+
+// Found in testing: a job title with quotes was shown with backslashes, and
+// line breaks in names reached the activity log (and its server-log copy)
+// as extra lines.
+func TestJobAndNameTextStaysOneLine(t *testing.T) {
+	e := demoServer(t, nil)
+	if msg := post(t, e, "/jobs", url.Values{"site": {"bkk1"}, "title": {`Fix "A" door`}, "date": {"2026-11-03"}}); msg != `Added “Fix "A" door” at BKK1.` {
+		t.Errorf("quotes = %q", msg)
+	}
+	for _, c := range []url.Values{
+		{"site": {"bkk1"}, "title": {"\u200b \u200b"}, "date": {"2026-11-03"}},
+		{"site": {"bkk1"}, "title": {"x"}, "date": {"0026-11-03"}},
+	} {
+		if msg := post(t, e, "/jobs", c); !strings.Contains(msg, "wasn't added") {
+			t.Errorf("%q = %q, want refused", c, msg)
+		}
+	}
+	forged := "Battery\n2026/11/04 19:00:00 activity: somchai: Deleted all backups"
+	post(t, e, "/admin/systems", url.Values{"name": {forged}, "aliases": {"Batt\r\nery, \u202egnp.exe"}})
+	sys, ok := e.store.Catalog().FindSystem("Battery 2026/11/04 19:00:00 activity: somchai: Deleted all backups")
+	if !ok || strings.ContainsAny(sys.Name, "\r\n") || strings.Join(sys.Aliases, "|") != "Batt|ery|gnp.exe" {
+		t.Errorf("system saved as %+v (%v)", sys, ok)
+	}
+	for _, a := range e.store.Audit(10) {
+		if strings.ContainsAny(a.Action+a.By+a.From, "\r\n\u202e") {
+			t.Errorf("activity entry spans lines: %q", a.Action)
+		}
+	}
+	code, _, _ := req(t, "GET", e.srv.URL+"/forecast.ics?token=demo", "", nil)
+	r, _ := noFollow.Get(e.srv.URL + "/forecast.ics?token=demo")
+	if code != 200 || !strings.Contains(r.Header.Get("Cache-Control"), "no-store") {
+		t.Errorf("feed = %d, Cache-Control %q", code, r.Header.Get("Cache-Control"))
+	}
+	r.Body.Close()
 }

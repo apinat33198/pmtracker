@@ -54,7 +54,7 @@ func (j *Job) Clean() error {
 	switch {
 	case j.SiteID == "":
 		return errors.New("pick the site")
-	case j.Title == "":
+	case !visible(j.Title):
 		return errors.New("enter what the job is")
 	case utf8.RuneCountInString(j.Title) > MaxJobTitle:
 		return fmt.Errorf("keep the job title under %d characters", MaxJobTitle)
@@ -63,15 +63,15 @@ func (j *Job) Clean() error {
 	case utf8.RuneCountInString(j.Note) > MaxJobNote:
 		return fmt.Errorf("keep the note under %d characters", MaxJobNote)
 	}
-	if _, err := time.Parse("2006-01-02", j.Date); err != nil {
-		return errors.New("enter the job's date")
+	if _, ok := jobDate(j.Date); !ok {
+		return errors.New("enter the job's date (between 2000 and 2100)")
 	}
 	switch j.Status {
 	case "", JobOpen:
 		j.Status, j.DoneOn, j.DoneBy = JobOpen, "", ""
 	case JobDone:
-		if _, err := time.Parse("2006-01-02", j.DoneOn); err != nil {
-			return errors.New("enter the date the job was done")
+		if _, ok := jobDate(j.DoneOn); !ok {
+			return errors.New("enter the date the job was done (between 2000 and 2100)")
 		}
 	default:
 		return fmt.Errorf("unknown job status %q", j.Status)
@@ -79,9 +79,30 @@ func (j *Job) Clean() error {
 	return nil
 }
 
-// oneLine trims s and turns runs of spaces, tabs and line breaks into one space.
+// oneLine trims s and turns runs of spaces, tabs, line breaks and other
+// control characters into one space. Text-direction overrides, which can make
+// a name read backwards, are dropped.
 func oneLine(s string) string {
+	s = strings.Map(func(r rune) rune {
+		if (r >= '\u202a' && r <= '\u202e') || (r >= '\u2066' && r <= '\u2069') {
+			return -1
+		}
+		return r
+	}, s)
 	return strings.Join(strings.FieldsFunc(s, func(r rune) bool { return unicode.IsSpace(r) || unicode.IsControl(r) }), " ")
+}
+
+// visible reports whether s has a character that shows on screen (not
+// only spaces or invisible formatting characters).
+func visible(s string) bool {
+	return strings.IndexFunc(s, func(r rune) bool { return unicode.IsGraphic(r) && !unicode.IsSpace(r) }) >= 0
+}
+
+// jobDate parses a job date, refusing ones far outside working life (a
+// mistyped year such as 0026 or 20266).
+func jobDate(s string) (time.Time, bool) {
+	d, err := time.Parse("2006-01-02", s)
+	return d, err == nil && d.Year() >= 2000 && d.Year() <= 2100
 }
 
 // JobView is a job with its site and dates worked out for display.
