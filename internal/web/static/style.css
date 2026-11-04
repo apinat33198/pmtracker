@@ -448,3 +448,13 @@ td.actions .row-menu form { display: grid; margin-left: 0; }
 .backups .row-menu { display: inline-block; vertical-align: top; }
 form.danger label.stack input[type="file"] { padding: 6px; }
 a.wide-link { display: block; text-align: center; word-break: break-all; }
+
+/* Phones and tablets: the grid scrolls inside its own frame like a spreadsheet
+   with frozen panes, so the system names stay at the top and the sites on the
+   left however far you scroll. */
+@media (max-width: 960px) {
+  .matrix-wrap { max-height: calc(100vh - 72px); max-height: calc(100dvh - 72px); overflow: auto; }
+  .matrix thead th { position: sticky; top: 0; z-index: 2; box-shadow: inset 0 -1px 0 var(--rule); }
+  .matrix thead th.m-site { left: 0; z-index: 4; }
+  .matrix tr.region th span { position: sticky; left: 12px; }
+}

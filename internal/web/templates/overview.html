@@ -30,7 +30,7 @@
   <tbody>
   {{$region := "-"}}
   {{range $d.Sites}}{{$ss := .}}
-    {{if ne .Site.Region $region}}{{$region = .Site.Region}}<tr class="region"><th colspan="{{add (len $d.Systems) 2}}" scope="colgroup">{{if .Site.Region}}{{.Site.Region}}{{else}}No region{{end}}</th></tr>{{end}}
+    {{if ne .Site.Region $region}}{{$region = .Site.Region}}<tr class="region"><th colspan="{{add (len $d.Systems) 2}}" scope="colgroup"><span>{{if .Site.Region}}{{.Site.Region}}{{else}}No region{{end}}</span></th></tr>{{end}}
     <tr>
       <th scope="row" class="m-site"><a href="/sites/{{.Site.ID}}"><i class="dot s-{{.Worst}}" title="{{.Worst.Label}}"></i><b>{{.Site.Code}}</b><span>{{.Site.Name}}</span></a></th>
       <td class="m-last">{{if .LastPM.IsZero}}<span class="sub">None</span>{{else}}{{dm .LastPM}}<span class="sub">{{sinceDays .LastPM}} days ago</span>{{end}}</td>
