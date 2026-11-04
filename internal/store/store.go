@@ -49,6 +49,8 @@ type state struct {
 	Marks     map[string]core.VisitMark `json:"marks"`
 	Manual    []core.ManualVisit        `json:"manual"`
 	Changes   []core.Change             `json:"changes"`
+	// Jobs are one-off ad-hoc jobs at sites, apart from the PM tasks.
+	Jobs []core.Job `json:"jobs,omitempty"`
 	// Audit is where the activity log was kept before it moved to its own
 	// files; read once to move old entries over, then always empty.
 	Audit  []AuditEntry `json:"audit,omitempty"`
@@ -321,6 +323,15 @@ func (s *Store) cleanup() {
 	}
 	s.st.Manual = manual
 
+	// A deleted site's ad-hoc jobs go with it, as its PM tasks do.
+	var jobs []core.Job
+	for _, j := range s.st.Jobs {
+		if _, ok := s.st.Catalog.Site(j.SiteID); ok {
+			jobs = append(jobs, j)
+		}
+	}
+	s.st.Jobs = jobs
+
 	cals := map[string]bool{}
 	for _, c := range s.st.Catalog.Calendars {
 		cals[c.ID] = true
@@ -348,6 +359,7 @@ func (s *Store) Inputs() core.Inputs {
 		Rules:     append([]core.LearnedRule(nil), s.st.Rules...),
 		Manual:    append([]core.ManualVisit(nil), s.st.Manual...),
 		Changes:   append([]core.Change(nil), s.st.Changes...),
+		Jobs:      append([]core.Job(nil), s.st.Jobs...),
 	}
 	for _, e := range s.st.Events {
 		in.Events = append(in.Events, e)
@@ -578,6 +590,80 @@ func (s *Store) MarkAll(marks []core.VisitMark, action string) error {
 		s.audit(marks[0].By, action)
 	}
 	return s.save()
+}
+
+// ErrNoJob means the ad-hoc job doesn't exist (any more).
+var ErrNoJob = errors.New("that job no longer exists")
+
+// AddJob checks and saves a new ad-hoc job, and returns it with its ID.
+func (s *Store) AddJob(j core.Job, action string) (core.Job, error) {
+	if err := j.Clean(); err != nil {
+		return core.Job{}, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.st.Catalog.Site(j.SiteID); !ok {
+		return core.Job{}, errors.New("that site no longer exists")
+	}
+	j.ID = s.st.NextID
+	s.st.NextID++
+	s.st.Jobs = append(s.st.Jobs, j)
+	if action != "" {
+		s.audit(j.By, action)
+	}
+	if err := s.save(); err != nil {
+		s.st.Jobs = s.st.Jobs[:len(s.st.Jobs)-1]
+		return core.Job{}, err
+	}
+	return j, nil
+}
+
+// UpdateJob applies fn to a copy of a job, checks it and saves it. The job
+// stays at its site. The action is formatted with the job as it is after fn.
+func (s *Store) UpdateJob(id int, by string, action func(core.Job) string, fn func(*core.Job) error) (core.Job, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i, old := range s.st.Jobs {
+		if old.ID != id {
+			continue
+		}
+		j := old
+		if err := fn(&j); err != nil {
+			return old, err
+		}
+		j.ID, j.SiteID, j.By, j.Created = old.ID, old.SiteID, old.By, old.Created
+		if err := j.Clean(); err != nil {
+			return old, err
+		}
+		s.st.Jobs[i] = j
+		s.audit(by, action(j))
+		if err := s.save(); err != nil {
+			s.st.Jobs[i] = old
+			return old, err
+		}
+		return j, nil
+	}
+	return core.Job{}, ErrNoJob
+}
+
+// DeleteJob removes a job and returns what it was.
+func (s *Store) DeleteJob(id int, by string, action func(core.Job) string) (core.Job, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i, j := range s.st.Jobs {
+		if j.ID != id {
+			continue
+		}
+		prev := s.st.Jobs
+		s.st.Jobs = append(append([]core.Job(nil), prev[:i]...), prev[i+1:]...)
+		s.audit(by, action(j))
+		if err := s.save(); err != nil {
+			s.st.Jobs = prev
+			return j, err
+		}
+		return j, nil
+	}
+	return core.Job{}, ErrNoJob
 }
 
 // Users returns the accounts stored in the data file.

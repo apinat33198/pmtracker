@@ -84,3 +84,57 @@
 </div>
 <label class="stack">Notes <input name="notes" value="{{with $v}}{{.Notes}}{{end}}" placeholder="Contract number, after-hours line, escalation contact"></label>
 {{end}}
+
+{{/* Ad-hoc jobs. Expects dict "Jobs", "Page" (the page data), "ShowSite",
+   "Actions" (buttons for editors) and "Empty" (text when there are none). */}}
+{{define "jobs"}}{{$p := .Page}}{{$show := .ShowSite}}{{$act := and $p.IsEditor .Actions}}
+<table class="plain upcoming jobs">
+  <thead><tr><th scope="col">Date</th><th scope="col">Job</th><th scope="col">Status</th>{{if $act}}<th scope="col"><span class="vh">Actions</span></th>{{end}}</tr></thead>
+  <tbody>
+  {{range .Jobs}}
+    <tr class="s-{{.Tone}}">
+      <td data-label="Date">{{if .IsOpen}}<span class="strong">{{dateShort .Day}}</span><span class="sub{{if lt .DaysLeft 0}} late{{end}}">{{dueRel .DaysLeft}}</span>{{else}}<span class="strong">{{dateShort .Done}}</span><span class="sub">done{{with .DoneBy}} by {{.}}{{end}}</span>{{end}}</td>
+      <td data-label="Job"><span class="job-title">{{if $show}}<a href="/sites/{{.Site.ID}}#jobs"><b>{{.Site.Code}}</b></a> {{end}}{{.Title}}</span><span class="sub">{{if $show}}{{.Site.Name}}{{if .Who}} · {{end}}{{end}}{{.Who}}{{if not .IsOpen}}{{if or $show .Who}} · {{end}}planned {{dm .Day}}{{end}}</span>{{with .Note}}<span class="sub job-note">{{.}}</span>{{end}}</td>
+      <td data-label="Status"><span class="pill s-{{.Tone}}">{{.Label}}</span></td>
+      {{if $act}}<td class="actions">
+        {{if .IsOpen}}<form method="post" action="/jobs/{{.ID}}/done"><input type="hidden" name="back" value="{{$p.Back}}"><button>Done</button></form>{{end}}
+        <details class="row-menu">
+          <summary>Edit…</summary>
+          <form method="post" action="/jobs/{{.ID}}">
+            <input type="hidden" name="back" value="{{$p.Back}}">
+            <label class="stack">Job <input name="title" value="{{.Title}}" required maxlength="200"></label>
+            <label class="stack">Date <input type="date" name="date" value="{{.Date}}" required></label>
+            {{if not .IsOpen}}<label class="stack">Done on <input type="date" name="done_on" value="{{.DoneOn}}" max="{{iso $p.Snap.Today}}" required></label>{{end}}
+            <label class="stack">Who does it <input name="who" value="{{.Who}}" list="job-who" maxlength="100"></label>
+            <label class="stack">Note <textarea name="note" rows="3" maxlength="2000">{{.Note}}</textarea></label>
+            <button>Save</button>
+          </form>
+          <form class="job-more" method="post" action="/jobs/{{.ID}}/{{if .IsOpen}}delete{{else}}reopen{{end}}">
+            <input type="hidden" name="back" value="{{$p.Back}}">
+            {{if .IsOpen}}<button class="danger-button">Delete job</button>{{else}}<button class="ghost">Reopen</button>
+            <button class="danger-button" formaction="/jobs/{{.ID}}/delete">Delete job</button>{{end}}
+          </form>
+        </details>
+      </td>{{end}}
+    </tr>
+  {{else}}
+    <tr><td colspan="4" class="empty">{{.Empty}}</td></tr>
+  {{end}}
+  </tbody>
+</table>
+{{end}}
+
+{{/* Form to add an ad-hoc job. Expects dict "Page", "Who" (suggestions), and
+   either "Sites" (a site picker) or "Site" (a fixed site ID). */}}
+{{define "jobForm"}}{{$p := .Page}}
+<form class="row-form job-form" method="post" action="/jobs">
+  <input type="hidden" name="back" value="{{$p.Back}}">
+  {{with .Sites}}<label>Site <select name="site" required><option value="">Pick a site</option>{{range .}}<option value="{{.ID}}">{{.Code}} {{.Name}}</option>{{end}}</select></label>{{else}}<input type="hidden" name="site" value="{{.Site}}">{{end}}
+  <label class="grow">Job <input name="title" required maxlength="200" placeholder="e.g. Repair raised floor"></label>
+  <label>Date <input type="date" name="date" value="{{iso $p.Snap.Today}}" required></label>
+  <label>Who does it <input name="who" list="job-who" maxlength="100" placeholder="Vendor or contractor"></label>
+  <label class="grow">Note <input name="note" maxlength="2000" placeholder="Where, quote or ticket number"></label>
+  <button>Add job</button>
+</form>
+<datalist id="job-who">{{range .Who}}<option value="{{.}}">{{end}}</datalist>
+{{end}}

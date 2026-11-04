@@ -261,3 +261,95 @@ func TestActivityLogSurvivesRestoreAndMovesOldEntries(t *testing.T) {
 		}
 	}
 }
+
+func TestJobs(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "data.json")
+	s, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.SetClock(func() time.Time { return day("2026-11-04") })
+	s.UpdateCatalog("t", "", func(c *core.Catalog) error {
+		c.Sites = []core.Site{{ID: "bkk1", Code: "BKK1", Name: "Bang Na"}, {ID: "cnx1", Code: "CNX1", Name: "Chiang Mai"}}
+		return nil
+	})
+	created := day("2026-11-04")
+	if _, err := s.AddJob(core.Job{SiteID: "nope", Title: "x", Date: "2026-11-04", By: "nok"}, "add"); err == nil {
+		t.Error("a job at a site that doesn't exist should be refused")
+	}
+	if _, err := s.AddJob(core.Job{SiteID: "bkk1", Title: " ", Date: "2026-11-04", By: "nok"}, "add"); err == nil {
+		t.Error("a job with no title should be refused")
+	}
+	a, err := s.AddJob(core.Job{SiteID: "bkk1", Title: "Repair raised floor", Date: "2026-11-04", By: "nok", Created: created}, "Added a job")
+	if err != nil || a.ID == 0 || a.Status != core.JobOpen {
+		t.Fatalf("add = %+v, %v", a, err)
+	}
+	b, _ := s.AddJob(core.Job{SiteID: "cnx1", Title: "Fix door", Date: "2026-11-09", By: "nok", Created: created}, "Added a job")
+
+	// An edit can't move a job to another site or change who added it.
+	got, err := s.UpdateJob(a.ID, "som", func(j core.Job) string { return "Edited " + j.Title }, func(j *core.Job) error {
+		j.Title, j.SiteID, j.By = "Repair raised floor, row C", "cnx1", "som"
+		j.Status, j.DoneOn, j.DoneBy = core.JobDone, "2026-11-04", "som"
+		return nil
+	})
+	if err != nil || got.Title != "Repair raised floor, row C" || got.SiteID != "bkk1" || got.By != "nok" || got.Status != core.JobDone {
+		t.Errorf("update = %+v, %v", got, err)
+	}
+	// A change that doesn't check out leaves the job as it was.
+	if _, err := s.UpdateJob(a.ID, "som", func(core.Job) string { return "x" }, func(j *core.Job) error { j.Date = "soon"; return nil }); err == nil {
+		t.Error("a bad date should be refused")
+	}
+	if _, err := s.UpdateJob(999, "som", func(core.Job) string { return "x" }, func(*core.Job) error { return nil }); err != ErrNoJob {
+		t.Errorf("missing job = %v", err)
+	}
+
+	// Saved to disk.
+	s2, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	jobs := s2.Inputs().Jobs
+	if len(jobs) != 2 || jobs[0].Title != "Repair raised floor, row C" || jobs[0].DoneOn != "2026-11-04" {
+		t.Fatalf("reopened = %+v", jobs)
+	}
+
+	// Backups carry jobs.
+	exp, _ := s.Export()
+	if !strings.Contains(string(exp), `"Fix door"`) {
+		t.Error("backups should hold the jobs")
+	}
+	if _, err := s.DeleteJob(b.ID, "som", func(j core.Job) string { return "Deleted " + j.Title }); err != nil {
+		t.Fatal(err)
+	}
+	if len(s.Inputs().Jobs) != 1 {
+		t.Error("delete didn't remove the job")
+	}
+	if err := s.Restore(exp, "som", "Restored"); err != nil {
+		t.Fatal(err)
+	}
+	if len(s.Inputs().Jobs) != 2 {
+		t.Error("restore should bring the deleted job back")
+	}
+
+	// Deleting a site deletes its jobs, as it does its PM tasks.
+	s.UpdateCatalog("t", "Deleted CNX1", func(c *core.Catalog) error {
+		c.Sites = c.Sites[:1]
+		return nil
+	})
+	if jobs := s.Inputs().Jobs; len(jobs) != 1 || jobs[0].SiteID != "bkk1" {
+		t.Errorf("after deleting cnx1: %+v", jobs)
+	}
+
+	var log []string
+	s.Activity().Each(func(e AuditEntry) error { log = append(log, e.By+": "+e.Action); return nil })
+	want := []string{"nok: Added a job", "nok: Added a job", "som: Edited Repair raised floor, row C", "som: Deleted Fix door"}
+	for _, w := range want {
+		found := false
+		for _, l := range log {
+			found = found || l == w
+		}
+		if !found {
+			t.Errorf("activity log is missing %q: %v", w, log)
+		}
+	}
+}

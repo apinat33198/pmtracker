@@ -52,6 +52,8 @@ type Snapshot struct {
 	Inbox       []EventView
 	Counts      map[Status]int
 	Unconfirmed int
+	OpenJobs    []JobView // ad-hoc jobs not done yet, soonest first
+	DoneJobs    []JobView // most recently done first
 }
 
 func (s Snapshot) Forecast(task string) (Forecast, bool) {
@@ -239,6 +241,7 @@ func Build(cfg *config.Config, in Inputs, now time.Time) Snapshot {
 	sort.SliceStable(snap.Inbox, func(i, j int) bool {
 		return abs(DaysBetween(today, snap.Inbox[i].Event.Start)) < abs(DaysBetween(today, snap.Inbox[j].Event.Start))
 	})
+	snap.OpenJobs, snap.DoneJobs = buildJobs(&cat, in.Jobs, today, loc)
 	return snap
 }
 
@@ -287,6 +290,28 @@ func Digest(s Snapshot, baseURL string) string {
 	section("Overdue", StatusOverdue)
 	section("Due soon, not booked", StatusDueSoon)
 	section("Booked off-cycle", StatusOffCycle)
+	var jobs []string
+	for _, j := range s.OpenJobs {
+		if j.DaysLeft > 0 {
+			break
+		}
+		line := fmt.Sprintf("• %s %s: ", j.Site.Code, j.Title)
+		switch {
+		case j.DaysLeft == 0:
+			line += "today"
+		case j.DaysLeft == -1:
+			line += "1 day late"
+		default:
+			line += fmt.Sprintf("%d days late", -j.DaysLeft)
+		}
+		if j.Who != "" {
+			line += " (" + j.Who + ")"
+		}
+		jobs = append(jobs, line)
+	}
+	if len(jobs) > 0 {
+		fmt.Fprintf(&b, "Ad-hoc jobs due (%d)\n%s\n\n", len(jobs), strings.Join(jobs, "\n"))
+	}
 	if n := len(s.Inbox); n == 1 {
 		b.WriteString("Review inbox: 1 event needs a decision\n")
 	} else if n > 1 {

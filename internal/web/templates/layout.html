@@ -14,6 +14,7 @@
   <nav class="nav" aria-label="Main">
     <a href="/"{{if eq .Nav "overview"}} aria-current="page"{{end}}>Overview</a>
     <a href="/inbox"{{if eq .Nav "inbox"}} aria-current="page"{{end}}>Review inbox{{with len .Snap.Inbox}} <span class="count">{{.}}</span>{{end}}</a>
+    <a href="/jobs"{{if eq .Nav "jobs"}} aria-current="page"{{end}}>Jobs{{with len .Snap.OpenJobs}} <span class="count">{{.}}</span>{{end}}</a>
     <a href="/events"{{if eq .Nav "events"}} aria-current="page"{{end}}>Events</a>
     {{if .IsAdmin}}<a href="/admin/sites"{{if eq .Nav "admin"}} aria-current="page"{{end}}>Admin</a>{{end}}
   </nav>

@@ -82,6 +82,7 @@ type Inputs struct {
 	Marks     map[string]VisitMark
 	Manual    []ManualVisit
 	Changes   []Change
+	Jobs      []Job
 }
 
 // MatchClass says how sure the matcher is that an event is a PM visit.

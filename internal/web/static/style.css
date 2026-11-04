@@ -499,3 +499,36 @@ a.wide-link { display: block; text-align: center; word-break: break-all; }
   .row-menu[open] { display: block; margin-top: 4px; }
   .row-menu form { min-width: 0; max-width: none; }
 }
+
+/* Ad-hoc jobs: one-off work, listed apart from the PM tasks. */
+.jobs .job-title { display: block; font-weight: 600; }
+.jobs .job-title a { color: inherit; text-decoration: none; }
+.jobs .job-title a:hover b { color: var(--brand); text-decoration: underline; }
+.jobs .job-note { white-space: pre-line; overflow-wrap: anywhere; }
+.jobs th:first-child { width: 150px; }
+.jobs th:nth-child(3) { width: 110px; }
+.jobs td.actions { width: 170px; }
+.jobs td.actions > form { display: inline-block; vertical-align: top; margin: 0 6px 0 0; }
+.jobs .row-menu { display: inline-block; vertical-align: top; }
+.jobs .row-menu form.job-more { display: flex; flex-wrap: wrap; gap: 8px; background: none; padding: 0 2px; }
+.jobs .row-menu textarea { width: 100%; font: inherit; }
+.jobs .row-menu > form:first-of-type { text-align: left; min-width: 300px; }
+.job-form { margin-top: 12px; }
+.done-jobs { margin: 10px 0 4px; }
+.done-jobs > summary { cursor: pointer; color: var(--brand); font-size: 14px; margin-bottom: 8px; }
+.overview-jobs { margin-top: 28px; }
+h2 .h-link { font-size: 13px; font-weight: 500; margin-left: 10px; }
+/* Phones: a compact card per job — the job on top, then its date and
+   status on one line, then the buttons. */
+@media (max-width: 760px) {
+  .jobs tbody tr { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 10px; align-items: center; }
+  .jobs td { padding: 0; }
+  .jobs td[data-label]::before { display: none; }
+  .jobs td[data-label="Job"] { grid-column: 1 / -1; order: -1; }
+  .jobs td[data-label="Date"] .strong, .jobs td[data-label="Date"] .sub { display: inline; margin-right: 6px; }
+  .jobs td[data-label="Status"] { justify-self: end; }
+  .jobs td.actions, .jobs td.empty { grid-column: 1 / -1; width: auto; text-align: left; }
+  .jobs td.actions:empty { display: none; }
+  .jobs .row-menu[open] { display: block; }
+  .jobs .row-menu > form:first-of-type { min-width: 0; }
+}

@@ -12,6 +12,13 @@ overview.
   system, vendor and status. Export to CSV.
 - **Site page:** every task with its last PM, next due date, booking and a
   timeline; recent visits; record a visit by hand.
+- **Ad-hoc jobs:** one-off work at a site outside the PM cycle, such as
+  "Repair raised floor": a date, who does it and a note, open or done. Add
+  them from a site's page or the Jobs page; open ones are listed on the
+  overview below the PM tables, and jobs due today or late go in the daily
+  digest. Jobs are kept apart from PM: they never change a PM date, status,
+  the grid or the vendor counts. Editors and admins add and close them;
+  everything is in the activity log, the backups and the Jobs CSV.
 - **Admin:** add, rename, archive and delete sites; add, edit, pause and
   delete PM tasks; set last PM dates; manage vendors, systems and calendars;
   import sites and tasks from CSV; activity log of who changed what.
@@ -401,11 +408,11 @@ cmd/pmtracker      flags, wiring, first-run seeding, digest scheduler
 internal/auth      password hashing, signed session cookies, failed sign-in limiter
 internal/config    JSON config: server, Google, defaults, auth options, roles
 internal/core      catalog (sites, systems, vendors, tasks, calendars), matcher,
-                   forecaster, snapshot with site and vendor roll-ups, CSV import,
-                   digest, ICS feed
+                   forecaster, snapshot with site and vendor roll-ups, ad-hoc
+                   jobs, CSV import, digest, ICS feed
 internal/gcal      service-account client, events.list paging, syncer with 410 recovery
 internal/store     JSON-file store: catalog, mirrored events, decisions, rules,
-                   marks, hand-recorded visits, change log, accounts and the
+                   marks, hand-recorded visits, ad-hoc jobs, change log, accounts and the
                    session key; the activity log in its own daily files
 internal/backup    daily backups, pruning, restore input
 internal/web       pages, sign-in, setup, accounts, admin handlers, role checks,

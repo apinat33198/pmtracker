@@ -1,0 +1,21 @@
+{{define "content"}}{{$d := .Data}}
+<section class="page-head with-tools">
+  <div>
+    <h1>Ad-hoc jobs</h1>
+    <p class="lede">One-off work at a site, such as a repair, outside the PM cycle. Jobs don't change any PM date or status. {{len $d.Open}} open.</p>
+  </div>
+  <a class="button ghost" href="/jobs.csv">Export CSV</a>
+</section>
+
+{{if .IsEditor}}
+<h2>Add a job</h2>
+{{template "jobForm" (dict "Page" . "Sites" $d.Sites "Who" $d.Who)}}
+{{end}}
+
+<h2>Open</h2>
+{{template "jobs" (dict "Jobs" $d.Open "Page" . "ShowSite" true "Actions" true "Empty" "No open jobs.")}}
+
+<h2>Done</h2>
+{{template "jobs" (dict "Jobs" $d.Done "Page" . "ShowSite" true "Actions" true "Empty" "No jobs done yet.")}}
+{{if $d.More}}<p class="hint small">Showing the {{len $d.Done}} most recently done. The CSV has all {{add (len $d.Done) $d.More}}.</p>{{end}}
+{{end}}

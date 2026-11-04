@@ -298,6 +298,11 @@ func demoSeed(ctx context.Context, sy *gcal.Syncer, st *store.Store, cfg *config
 		}
 	}
 	st.MarkAll(marks, "")
+	if len(st.Inputs().Jobs) == 0 {
+		for _, j := range demo.Jobs(now(), cfg.Location()) {
+			st.AddJob(j, "")
+		}
+	}
 }
 
 // check verifies credentials and calendar access without touching the store.

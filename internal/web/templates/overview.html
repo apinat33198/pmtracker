@@ -88,4 +88,11 @@
     </table>
   </section>
 </div>
+{{with $d.Jobs}}
+<section class="overview-jobs">
+  <h2>Ad-hoc jobs <a class="h-link" href="/jobs">All jobs</a></h2>
+  {{template "jobs" (dict "Jobs" . "Page" $ "ShowSite" true)}}
+  {{if $d.MoreJobs}}<p class="hint small"><a href="/jobs">{{$d.MoreJobs}} more open</a></p>{{end}}
+</section>
+{{end}}
 {{end}}

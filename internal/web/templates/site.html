@@ -35,6 +35,16 @@
 {{end}}
 {{with $d.Paused}}<p class="hint">Paused: {{range $i, $t := .}}{{if $i}}, {{end}}{{$cat.SystemName $t.System}} by {{$cat.VendorName $t.Vendor}}{{end}}. Paused tasks get no forecast or reminders.</p>{{end}}
 
+<h2 id="jobs">Ad-hoc jobs</h2>
+<p class="hint">One-off work at this site, such as a repair. Jobs don't change any PM date or status.</p>
+{{template "jobs" (dict "Jobs" $d.OpenJobs "Page" . "Actions" true "Empty" "No open jobs at this site.")}}
+{{with $d.DoneJobs}}<details class="done-jobs">
+  <summary>Done jobs ({{if $d.MoreDone}}the {{len .}} most recent{{else}}{{len .}}{{end}})</summary>
+  {{template "jobs" (dict "Jobs" . "Page" $ "Actions" true)}}
+  {{if $d.MoreDone}}<p class="hint small"><a href="/jobs">See every job</a></p>{{end}}
+</details>{{end}}
+{{if .IsEditor}}{{template "jobForm" (dict "Page" . "Site" $ss.Site.ID "Who" $d.Who)}}{{end}}
+
 {{if and .IsEditor $ss.Forecasts}}
 <h2>Record a PM visit</h2>
 <p class="hint">For a visit that isn't on the calendar, or history from paper records. Tick every system the vendor serviced on that trip.</p>

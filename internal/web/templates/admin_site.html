@@ -68,7 +68,7 @@
     <button class="ghost">{{if $s.Archived}}Restore site{{else}}Archive site{{end}}</button>
   </form>
   <form method="post" action="/admin/sites/{{$s.ID}}/delete">
-    <p>Deleting removes the site, its {{len $d.Tasks}} PM {{plural (len $d.Tasks) "task" "tasks"}} and visits recorded by hand. Calendar events stay in Google. This can't be undone.</p>
+    <p>Deleting removes the site, its {{len $d.Tasks}} PM {{plural (len $d.Tasks) "task" "tasks"}}, visits recorded by hand and its ad-hoc jobs. Calendar events stay in Google. This can't be undone.</p>
     <label class="stack">Type {{$s.Code}} to confirm <input name="confirm" autocomplete="off" required></label>
     <button class="danger-button">Delete site</button>
   </form>

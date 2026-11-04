@@ -92,6 +92,8 @@ func (s *Server) Handler() (http.Handler, error) {
 	handle("GET /tasks/{id}", v, s.taskPage)
 	handle("GET /inbox", v, s.inbox)
 	handle("GET /events", v, s.events)
+	handle("GET /jobs", v, s.jobsPage)
+	handle("GET /jobs.csv", v, s.jobsCSV)
 	handle("GET /export.csv", v, s.exportCSV)
 	handle("GET /digest.txt", v, s.digestText)
 	handle("GET /account", v, s.accountPage)
@@ -106,6 +108,11 @@ func (s *Server) Handler() (http.Handler, error) {
 	handle("POST /visits/unmark", e, s.unmark)
 	handle("POST /visits/manual", e, s.addManual)
 	handle("POST /visits/manual/delete", e, s.deleteManual)
+	handle("POST /jobs", e, s.addJob)
+	handle("POST /jobs/{id}", e, s.editJob)
+	handle("POST /jobs/{id}/done", e, s.jobDone)
+	handle("POST /jobs/{id}/reopen", e, s.jobReopen)
+	handle("POST /jobs/{id}/delete", e, s.deleteJob)
 
 	handle("GET /admin", a, func(w http.ResponseWriter, r *http.Request) { http.Redirect(w, r, "/admin/sites", http.StatusSeeOther) })
 	handle("GET /admin/sites", a, s.adminSites)
@@ -311,6 +318,8 @@ type overviewData struct {
 	Total                          int
 	Filtered                       bool
 	Query                          string
+	Jobs                           []core.JobView // open ad-hoc jobs (region filter only)
+	MoreJobs                       int
 }
 
 type chip struct {
@@ -394,16 +403,35 @@ func (s *Server) overview(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	d.Vendors = snap.Vendors
+	for _, j := range snap.OpenJobs {
+		if d.Region == "" || j.Site.Region == d.Region {
+			d.Jobs = append(d.Jobs, j)
+		}
+	}
+	if len(d.Jobs) > overviewJobs {
+		d.MoreJobs = len(d.Jobs) - overviewJobs
+		d.Jobs = d.Jobs[:overviewJobs]
+	}
 	s.render(w, r, "overview", "overview", "Overview", snap, d)
 }
 
+// overviewJobs is how many open ad-hoc jobs the overview lists.
+const overviewJobs = 8
+
 type siteData struct {
-	S       core.SiteSummary
-	Paused  []core.Task
-	Visits  []core.Visit
-	Vendors []siteVendor
-	Today   time.Time
+	S        core.SiteSummary
+	Paused   []core.Task
+	Visits   []core.Visit
+	Vendors  []siteVendor
+	Today    time.Time
+	OpenJobs []core.JobView
+	DoneJobs []core.JobView
+	MoreDone int
+	Who      []string
 }
+
+// siteDoneJobs is how many done ad-hoc jobs a site page lists.
+const siteDoneJobs = 10
 
 func (s *Server) sitePage(w http.ResponseWriter, r *http.Request) {
 	snap := s.snapshot()
@@ -412,7 +440,12 @@ func (s *Server) sitePage(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	d := siteData{S: ss, Today: snap.Today, Vendors: siteVendors(*snap.Catalog, ss.Site.ID)}
+	d := siteData{S: ss, Today: snap.Today, Vendors: siteVendors(*snap.Catalog, ss.Site.ID), Who: whoOptions(snap)}
+	d.OpenJobs, d.DoneJobs = snap.JobsAt(ss.Site.ID)
+	if len(d.DoneJobs) > siteDoneJobs {
+		d.MoreDone = len(d.DoneJobs) - siteDoneJobs
+		d.DoneJobs = d.DoneJobs[:siteDoneJobs]
+	}
 	for _, t := range snap.Catalog.TasksAt(ss.Site.ID) {
 		if t.Paused {
 			d.Paused = append(d.Paused, t)

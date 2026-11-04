@@ -350,3 +350,16 @@ func (s *Source) List(_ context.Context, calendarID, syncToken string, _ time.Ti
 	}
 	return nil, syncToken, nil
 }
+
+// Jobs are a few ad-hoc jobs around today: one late, one today, one coming
+// up and one done.
+func Jobs(now time.Time, loc *time.Location) []core.Job {
+	today := core.Day(now, loc)
+	d := func(n int) string { return today.AddDate(0, 0, n).Format("2006-01-02") }
+	return []core.Job{
+		{SiteID: "bkk2", Title: "Replace cracked raised-floor tiles by rack row C", Date: d(-3), Who: "Facility team", Note: "Two tiles lifting; keep the area taped off.", Status: core.JobOpen, By: "demo", Created: now.AddDate(0, 0, -6)},
+		{SiteID: "bkk1", Title: "Repair raised floor", Date: d(0), Who: "Siam Floor Works", Note: "Quote QT-2026-118", Status: core.JobOpen, By: "demo", Created: now.AddDate(0, 0, -1)},
+		{SiteID: "cnx1", Title: "Fix door access reader", Date: d(5), Who: "Khun Somchai", Status: core.JobOpen, By: "demo", Created: now.AddDate(0, 0, -2)},
+		{SiteID: "hkt1", Title: "Clear condensate drain, CRAC 2", Date: d(-9), Who: "Andaman HVAC", Status: core.JobDone, DoneOn: d(-8), DoneBy: "demo", By: "demo", Created: now.AddDate(0, 0, -12)},
+	}
+}
