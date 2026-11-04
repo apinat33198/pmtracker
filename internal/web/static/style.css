@@ -468,3 +468,25 @@ a.wide-link { display: block; text-align: center; word-break: break-all; }
   .matrix tbody tr:first-child.region th { padding-top: 4px; }
 }
 @media (min-width: 961px) { .matrix td.m-notasks { display: none; } }
+
+/* Phones: number columns aren't squeezed into the computer layout's narrow
+   right-aligned column, and each vendor in "By vendor" is a compact card:
+   name on top, the four counts side by side. */
+@media (max-width: 760px) {
+  th.num, td.num { width: auto; text-align: left; }
+  .vendors tbody tr { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px 10px; padding: 12px 14px; }
+  .vendors td { padding: 0; }
+  .vendors td:first-child { grid-column: 1 / -1; padding-bottom: 8px; }
+  .vendors td:first-child::before { display: none; }
+  .vendors td.num::before { margin-bottom: 2px; }
+  .vendors td.num { font-size: 15px; }
+}
+
+/* The "Restore…" and user menus sit in a no-wrap buttons cell: their own
+   text wraps, so an open menu fits the screen. On phones an open menu takes
+   the full width under the buttons. */
+.row-menu form { white-space: normal; min-width: 240px; max-width: 380px; }
+@media (max-width: 760px) {
+  .row-menu[open] { display: block; margin-top: 4px; }
+  .row-menu form { min-width: 0; max-width: none; }
+}
