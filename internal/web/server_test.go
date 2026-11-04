@@ -486,3 +486,32 @@ func TestImportIsAllOrNothing(t *testing.T) {
 		t.Errorf("Buddhist year: %v %v", d, err)
 	}
 }
+
+func TestOverviewWorksOnPhones(t *testing.T) {
+	e := demoServer(t, nil)
+	body := get(t, e, "/")
+	// Every date in the grid carries its system's name for the phone layout.
+	if !strings.Contains(body, `class="m-cell" data-label="UPS"`) || !strings.Contains(body, `data-label="Last PM"`) {
+		t.Error("grid cells should be labelled with their system")
+	}
+	// The style sheet's address changes with its content, so Cloudflare and
+	// browsers can't keep serving an old copy after an update.
+	i := strings.Index(body, `/static/style.css?v=`)
+	if i < 0 {
+		t.Fatal("style sheet should be linked with a version")
+	}
+	css := body[i : i+strings.IndexByte(body[i:], '"')]
+	resp, err := http.Get(e.srv.URL + css)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != 200 || !strings.Contains(resp.Header.Get("Cache-Control"), "immutable") {
+		t.Errorf("versioned css = %d %q", resp.StatusCode, resp.Header.Get("Cache-Control"))
+	}
+	resp, _ = http.Get(e.srv.URL + "/static/style.css")
+	resp.Body.Close()
+	if resp.Header.Get("Cache-Control") != "no-cache" {
+		t.Errorf("unversioned css cache = %q", resp.Header.Get("Cache-Control"))
+	}
+}

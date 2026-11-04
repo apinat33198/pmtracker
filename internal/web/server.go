@@ -10,6 +10,7 @@ import (
 	"embed"
 	"encoding/base64"
 	"encoding/csv"
+	"encoding/hex"
 	"fmt"
 	"html/template"
 	"io/fs"
@@ -64,7 +65,17 @@ func (s *Server) Handler() (http.Handler, error) {
 	}
 	mux := http.NewServeMux()
 	static, _ := fs.Sub(staticFS, "static")
-	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServerFS(static)))
+	files := http.StripPrefix("/static/", http.FileServerFS(static))
+	mux.Handle("GET /static/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Pages link to /static/file?v=<content hash>, so a new release gets a
+		// new address and browsers and Cloudflare never serve a stale copy.
+		if r.URL.Query().Get("v") != "" {
+			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+		} else {
+			w.Header().Set("Cache-Control", "no-cache")
+		}
+		files.ServeHTTP(w, r)
+	}))
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) { w.Write([]byte("ok\n")) })
 	mux.HandleFunc("GET /forecast.ics", s.feed)
 	mux.HandleFunc("GET /login", s.loginPage)
@@ -166,6 +177,7 @@ func (s *Server) parse() error {
 		"statuses":   func() []core.Status { return core.AllStatuses },
 		"count":      func(m map[core.Status]int, s string) int { return m[core.Status(s)] },
 		"newVendor":  func() string { return newVendorOption },
+		"asset":      assetURL,
 		"size":       sizeText,
 		"backupKind": backupKind,
 		"backupWhen": backupWhen,
@@ -853,4 +865,15 @@ func ago(t, now time.Time) string {
 	default:
 		return fmt.Sprintf("%d days ago", int(d.Hours()/24))
 	}
+}
+
+// assetURL is a static file's address with a hash of its content, so it
+// changes whenever the file does.
+func assetURL(name string) string {
+	b, err := fs.ReadFile(staticFS, "static/"+name)
+	if err != nil {
+		return "/static/" + name
+	}
+	sum := sha256.Sum256(b)
+	return "/static/" + name + "?v=" + hex.EncodeToString(sum[:4])
 }
