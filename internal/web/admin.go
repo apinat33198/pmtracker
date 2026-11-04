@@ -305,6 +305,43 @@ func resolveVendor(c *core.Catalog, sel, newName string) (key string, created bo
 	return sel, false, nil
 }
 
+// resolveSystem turns a system picker choice into a system key, adding the
+// system when "add a new system" was chosen (or using the existing one whose
+// name or other name matches what was typed).
+func resolveSystem(c *core.Catalog, sel, newName string) (string, error) {
+	if sel == newVendorOption {
+		sys, _, err := c.EnsureSystem(newName)
+		return sys.Key, err
+	}
+	if _, ok := c.System(sel); !ok {
+		return "", errors.New("Choose a system from the list, or add a new one.")
+	}
+	return sel, nil
+}
+
+// systemChoice names the system picked on a form, for messages written before saving.
+func systemChoice(c core.Catalog, sel, newName string) string {
+	if sel == newVendorOption {
+		if sys, ok := c.FindSystem(newName); ok {
+			return sys.Name
+		}
+		return strings.Join(strings.Fields(newName), " ")
+	}
+	return c.SystemName(sel)
+}
+
+// newSystemNote tells the admin when saving a task added a system.
+func newSystemNote(before, after core.Catalog, taskID string) string {
+	t, ok := after.Task(taskID)
+	if !ok {
+		return ""
+	}
+	if _, existed := before.System(t.System); existed {
+		return ""
+	}
+	return fmt.Sprintf(" %s is a new system, so it's a new column on the overview; add its other names on the Systems page.", after.SystemName(t.System))
+}
+
 // vendorChoice names the vendor picked on a form, for messages written before saving.
 func vendorChoice(c core.Catalog, sel, newName string) string {
 	if sel == newVendorOption {
@@ -354,8 +391,15 @@ func (s *Server) taskFromForm(r *http.Request, c *core.Catalog, t *core.Task) er
 		t.AnchorDate = d.Format("2006-01-02")
 	}
 	t.Notes = strings.TrimSpace(r.FormValue("notes"))
-	if sys := r.FormValue("system"); sys != "" {
-		t.System = sys
+	switch sel := r.FormValue("system"); {
+	case sel != "":
+		key, err := resolveSystem(c, sel, r.FormValue("new_system"))
+		if err != nil {
+			return err
+		}
+		t.System = key
+	case t.System == "":
+		return errors.New("Choose the task's system.")
 	}
 	if sel := r.FormValue("vendor"); sel != "" {
 		key, _, err := resolveVendor(c, sel, r.FormValue("new_vendor"))
@@ -374,7 +418,7 @@ func (s *Server) adminAddTask(w http.ResponseWriter, r *http.Request) {
 	var task core.Task
 	cat := s.Store.Catalog()
 	err := s.Store.UpdateCatalog(u.Name, fmt.Sprintf("Added a PM task at %s: %s by %s", cat.SiteLabel(siteID),
-		cat.SystemName(r.FormValue("system")), vendorChoice(cat, r.FormValue("vendor"), r.FormValue("new_vendor"))), func(c *core.Catalog) error {
+		systemChoice(cat, r.FormValue("system"), r.FormValue("new_system")), vendorChoice(cat, r.FormValue("vendor"), r.FormValue("new_vendor"))), func(c *core.Catalog) error {
 		if _, ok := c.Site(siteID); !ok {
 			return errors.New("That site no longer exists.")
 		}
@@ -389,7 +433,7 @@ func (s *Server) adminAddTask(w http.ResponseWriter, r *http.Request) {
 		s.redirect(w, r, back, err.Error(), "error")
 		return
 	}
-	msg := fmt.Sprintf("Added %s.", s.Store.Catalog().TaskLabel(task.ID))
+	msg := fmt.Sprintf("Added %s.", s.Store.Catalog().TaskLabel(task.ID)) + newSystemNote(cat, s.Store.Catalog(), task.ID)
 	if v := strings.TrimSpace(r.FormValue("last_pm")); v != "" {
 		d, err := core.ParseDate(v, s.Cfg.Location())
 		if err == nil && !d.After(core.Day(s.Now(), s.Cfg.Location())) {
@@ -427,7 +471,8 @@ func (s *Server) adminTask(w http.ResponseWriter, r *http.Request) {
 func (s *Server) adminUpdateTask(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	back := "/admin/tasks/" + id
-	label := s.Store.Catalog().TaskLabel(id)
+	before := s.Store.Catalog()
+	label := before.TaskLabel(id)
 	err := s.Store.UpdateCatalog(userOf(r).Name, "Edited the PM task "+label, func(c *core.Catalog) error {
 		for i := range c.Tasks {
 			if c.Tasks[i].ID == id {
@@ -446,7 +491,8 @@ func (s *Server) adminUpdateTask(w http.ResponseWriter, r *http.Request) {
 		s.redirect(w, r, back, err.Error(), "error")
 		return
 	}
-	s.redirect(w, r, back, "Saved "+s.Store.Catalog().TaskLabel(id)+".", "")
+	after := s.Store.Catalog()
+	s.redirect(w, r, back, "Saved "+after.TaskLabel(id)+"."+newSystemNote(before, after, id), "")
 }
 
 func (s *Server) adminDeleteTask(w http.ResponseWriter, r *http.Request) {

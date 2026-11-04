@@ -45,7 +45,7 @@
 <h2>Add a PM task</h2>
 <form class="panel" method="post" action="/admin/sites/{{$s.ID}}/tasks">
   <div class="grid-4">
-    <label class="stack">System <select name="system" required>{{range $cat.Systems}}<option value="{{.Key}}">{{.Name}}</option>{{end}}</select></label>
+    <div class="stack"><span class="label">System</span>{{template "systemSelect" (dict "ID" "ns-task" "Selected" "" "Cat" $cat)}}</div>
     <div class="stack"><span class="label">Vendor</span>{{template "vendorSelect" (dict "Name" "vendor" "NewName" "new_vendor" "ID" "nv-task" "Selected" "" "Cat" $cat "Empty" "")}}</div>
     <label class="stack">Every <span class="with-unit"><input name="interval_months" type="number" min="1" max="60" value="{{$.Cfg.Defaults.IntervalMonths}}"> months</span></label>
     <label class="stack">Last PM date <input type="date" name="last_pm" max="{{iso $.Snap.Today}}"><span class="field-hint">Optional; starts the forecast</span></label>

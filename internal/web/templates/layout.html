@@ -6,6 +6,7 @@
 <title>{{.Title}} – PM Tracker</title>
 <link rel="stylesheet" href="{{asset "style.css"}}">
 <link rel="icon" href="{{asset "icon.svg"}}" type="image/svg+xml">
+<script src="{{asset "pick.js"}}" defer></script>
 </head>
 <body>
 <header class="top">
@@ -39,19 +40,19 @@
 {{template "content" .}}
 </main>
 <script>
-// Show the "new vendor's name" box only when "Add a new vendor" is picked.
+// Show the "new vendor's (or system's) name" box only when "Add a new …" is picked.
 (function () {
   function sync(sel) {
-    var box = document.getElementById(sel.dataset.newVendor);
+    var box = document.getElementById(sel.dataset.newBox);
     if (!box) return;
     var on = sel.value === "__new__";
     box.hidden = !on;
     box.querySelector("input").required = on;
     return on && box;
   }
-  document.querySelectorAll("select[data-new-vendor]").forEach(sync);
+  document.querySelectorAll("select[data-new-box]").forEach(sync);
   document.addEventListener("change", function (e) {
-    var sel = e.target.closest && e.target.closest("select[data-new-vendor]");
+    var sel = e.target.closest && e.target.closest("select[data-new-box]");
     if (sel) { var box = sync(sel); if (box) box.querySelector("input").focus(); }
   });
 })();

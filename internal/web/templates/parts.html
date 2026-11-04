@@ -47,12 +47,26 @@
      first option; empty means a vendor is required). */}}
 {{define "vendorSelect"}}
 <span class="vendor-pick">
-  <select name="{{.Name}}" data-new-vendor="{{.ID}}" aria-label="Vendor"{{if not .Empty}} required{{end}}>
+  <select name="{{.Name}}" data-new-box="{{.ID}}" aria-label="Vendor"{{if not .Empty}} required{{end}}>
     {{with .Empty}}<option value="">{{.}}</option>{{end}}
     {{range .Cat.Vendors}}<option value="{{.Key}}"{{if eq .Key $.Selected}} selected{{end}}>{{.Name}}</option>{{end}}
     <option value="{{newVendor}}">Add a new vendor…</option>
   </select>
   <span class="new-vendor" id="{{.ID}}"><input name="{{.NewName}}" placeholder="New vendor's name" autocomplete="off" aria-label="New vendor's name"></span>
+</span>
+{{end}}
+
+{{/* System picker. A plain dropdown with "Add a new system…"; the page
+   script turns it into a search box (name and other names). Expects dict
+   "ID", "Selected" (a system key, or "" to start empty) and "Cat". */}}
+{{define "systemSelect"}}
+<span class="vendor-pick">
+  <select name="system" data-search="system" data-new-box="{{.ID}}" aria-label="System" required>
+    {{if not .Selected}}<option value="">Pick a system</option>{{end}}
+    {{range .Cat.Systems}}<option value="{{.Key}}"{{with .Aliases}} data-aliases="{{join . ", "}}"{{end}}{{if eq .Key $.Selected}} selected{{end}}>{{.Name}}</option>{{end}}
+    <option value="{{newVendor}}">Add a new system…</option>
+  </select>
+  <span class="new-vendor" id="{{.ID}}"><input name="new_system" placeholder="New system's name" autocomplete="off" maxlength="80" aria-label="New system's name"></span>
 </span>
 {{end}}
 

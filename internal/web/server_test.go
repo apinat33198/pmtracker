@@ -515,3 +515,52 @@ func TestOverviewWorksOnPhones(t *testing.T) {
 		t.Errorf("unversioned css cache = %q", resp.Header.Get("Cache-Control"))
 	}
 }
+
+func TestTaskSystemPicker(t *testing.T) {
+	e := demoServer(t, nil)
+	cat := e.store.Catalog()
+	systems := len(cat.Systems)
+	add := func(form url.Values) string {
+		form.Set("vendor", "abcpower")
+		return post(t, e, "/admin/sites/bkk1/tasks", form)
+	}
+	// A "new" name that is another system's other name uses that system.
+	if msg := add(url.Values{"system": {newVendorOption}, "new_system": {"  precision   AIR "}}); !strings.HasPrefix(msg, "Added BKK1 CRAC") || strings.Contains(msg, "new system") {
+		t.Errorf("other name = %q", msg)
+	}
+	if n := len(e.store.Catalog().Systems); n != systems {
+		t.Errorf("matching an existing system added one: %d systems", n)
+	}
+	// A truly new name adds a system (a new overview column) and says so.
+	msg := add(url.Values{"system": {newVendorOption}, "new_system": {"Battery  bank"}})
+	if !strings.Contains(msg, "Added BKK1 Battery bank (ABC Power). Battery bank is a new system") {
+		t.Errorf("new system = %q", msg)
+	}
+	sys, ok := e.store.Catalog().FindSystem("battery bank")
+	if !ok || sys.Key != "battery-bank" || len(e.store.Catalog().Systems) != systems+1 {
+		t.Errorf("new system = %+v (%v)", sys, ok)
+	}
+	for _, c := range []struct {
+		form url.Values
+		want string
+	}{
+		{url.Values{"system": {"nope"}}, "Choose a system from the list"},
+		{url.Values{"system": {""}}, "Choose the task's system"},
+		{url.Values{"system": {newVendorOption}, "new_system": {"  "}}, "Enter the new system's name"},
+		{url.Values{"system": {newVendorOption}, "new_system": {strings.Repeat("x", 81)}}, "under 80"},
+	} {
+		if msg := add(c.form); !strings.Contains(msg, c.want) {
+			t.Errorf("%v = %q, want %q", c.form, msg, c.want)
+		}
+	}
+	// Editing a task can move it to a new system; its history stays.
+	tk := e.store.Catalog().TasksAt("bkk1")[0]
+	msg = post(t, e, "/admin/tasks/"+tk.ID, url.Values{"system": {newVendorOption}, "new_system": {"Rectifier cabinet"}, "vendor": {tk.Vendor}})
+	if !strings.Contains(msg, "Rectifier cabinet is a new system") {
+		t.Errorf("edit to a new system = %q", msg)
+	}
+	// Pages carry the other names the search box looks through.
+	if p := get(t, e, "/admin/sites/bkk1"); !strings.Contains(p, `data-search="system"`) || !strings.Contains(p, `data-aliases="CRAC, PAC, Precision AC, Precision air"`) {
+		t.Error("the add-task form should offer the system search box with other names")
+	}
+}

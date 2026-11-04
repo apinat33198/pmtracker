@@ -8,7 +8,7 @@
 
 <form class="panel" method="post" action="/admin/tasks/{{$t.ID}}">
   <div class="grid-4">
-    <label class="stack">System <select name="system">{{range $cat.Systems}}<option value="{{.Key}}"{{if eq .Key $t.System}} selected{{end}}>{{.Name}}</option>{{end}}</select></label>
+    <div class="stack"><span class="label">System</span>{{template "systemSelect" (dict "ID" "ns-edit" "Selected" $t.System "Cat" $cat)}}<span class="field-hint">Changing system keeps the visit history</span></div>
     <div class="stack"><span class="label">Vendor</span>{{template "vendorSelect" (dict "Name" "vendor" "NewName" "new_vendor" "ID" "nv-edit" "Selected" $t.Vendor "Cat" $cat "Empty" "")}}<span class="field-hint">Changing vendor keeps the visit history</span></div>
     <label class="stack">Every <span class="with-unit"><input name="interval_months" type="number" min="1" max="60" value="{{if $t.IntervalMonths}}{{$t.IntervalMonths}}{{else}}{{$.Cfg.Defaults.IntervalMonths}}{{end}}"> months</span></label>
     <label class="stack">Cycle <select name="anchor_mode"><option value="rolling">From the last visit</option><option value="fixed"{{if eq $t.AnchorMode "fixed"}} selected{{end}}>Fixed contract slots</option></select></label>

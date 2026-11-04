@@ -21,7 +21,11 @@ overview.
   everything is in the activity log, the backups and the Jobs CSV.
 - **Admin:** add, rename, archive and delete sites; add, edit, pause and
   delete PM tasks; set last PM dates; manage vendors, systems and calendars;
-  import sites and tasks from CSV; activity log of who changed what.
+  import sites and tasks from CSV; activity log of who changed what. The
+  System field on task forms is a search box: type part of a name or other
+  name ("PAC" finds CRAC) and pick it, or choose "Add … as a new system". A
+  typed name that matches an existing system or its other names always uses
+  that system, so it can't add a near-duplicate column.
 - **Vendors:** a vendor list (contact person, phone, email, email domains,
   other names) that feeds every vendor dropdown. Each vendor shows the sites
   and systems it covers and what needs attention. Move all of one vendor's

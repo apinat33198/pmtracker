@@ -275,6 +275,28 @@ func (c *Catalog) EnsureVendor(name string) (v Vendor, created bool, err error) 
 	return v, true, nil
 }
 
+// MaxSystemName bounds a system's name: it's a column heading on the overview.
+const MaxSystemName = 80
+
+// EnsureSystem finds a system by key, name or other name, or adds one with
+// that name. Matching other names means typing "PAC" picks CRAC rather than
+// adding a second, near-duplicate column.
+func (c *Catalog) EnsureSystem(name string) (s System, created bool, err error) {
+	name = oneLine(name)
+	if name == "" {
+		return System{}, false, errors.New("Enter the new system's name.")
+	}
+	if len([]rune(name)) > MaxSystemName {
+		return System{}, false, fmt.Errorf("Keep the system's name under %d characters.", MaxSystemName)
+	}
+	if s, ok := c.FindSystem(name); ok {
+		return s, false, nil
+	}
+	s = System{Key: UniqueSlug(name, func(k string) bool { _, ok := c.System(k); return ok }), Name: name}
+	c.Systems = append(c.Systems, s)
+	return s, true, nil
+}
+
 // AddTask assigns an ID and appends the task.
 func (c *Catalog) AddTask(t Task) Task {
 	c.NextTask++
