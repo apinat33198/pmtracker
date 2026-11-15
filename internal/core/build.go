@@ -54,6 +54,9 @@ type Snapshot struct {
 	Unconfirmed int
 	OpenJobs    []JobView // ad-hoc jobs not done yet, soonest first
 	DoneJobs    []JobView // most recently done first
+	// Findings are open ones (most serious first), then closed ones.
+	Findings     []FindingView
+	OpenFindings int
 }
 
 func (s Snapshot) Forecast(task string) (Forecast, bool) {
@@ -242,6 +245,12 @@ func Build(cfg *config.Config, in Inputs, now time.Time) Snapshot {
 		return abs(DaysBetween(today, snap.Inbox[i].Event.Start)) < abs(DaysBetween(today, snap.Inbox[j].Event.Start))
 	})
 	snap.OpenJobs, snap.DoneJobs = buildJobs(&cat, in.Jobs, today, loc)
+	snap.Findings = buildFindings(&cat, in.Findings, today, loc)
+	for _, f := range snap.Findings {
+		if f.IsOpen() {
+			snap.OpenFindings++
+		}
+	}
 	return snap
 }
 
@@ -312,6 +321,20 @@ func Digest(s Snapshot, baseURL string) string {
 	if len(jobs) > 0 {
 		fmt.Fprintf(&b, "Ad-hoc jobs due (%d)\n%s\n\n", len(jobs), strings.Join(jobs, "\n"))
 	}
+	var findings []string
+	for _, f := range s.Findings {
+		if !f.Late() {
+			continue
+		}
+		line := fmt.Sprintf("• %s #%d %s (%s): %s", f.Site.Code, f.ID, f.Title, strings.ToLower(f.SeverityLabel()), dueText(f.DaysLeft))
+		if f.Owner != "" {
+			line += " (" + f.Owner + ")"
+		}
+		findings = append(findings, line)
+	}
+	if len(findings) > 0 {
+		fmt.Fprintf(&b, "Findings past their target date (%d)\n%s\n\n", len(findings), strings.Join(findings, "\n"))
+	}
 	if n := len(s.Inbox); n == 1 {
 		b.WriteString("Review inbox: 1 event needs a decision\n")
 	} else if n > 1 {
@@ -330,4 +353,19 @@ func Digest(s Snapshot, baseURL string) string {
 		out += "\n" + strings.TrimRight(baseURL, "/") + "/"
 	}
 	return strings.TrimSpace(out)
+}
+
+// dueText says how late something is: "today", "1 day late", "3 days late".
+func dueText(daysLeft int) string {
+	switch {
+	case daysLeft == 0:
+		return "today"
+	case daysLeft == -1:
+		return "1 day late"
+	case daysLeft < 0:
+		return fmt.Sprintf("%d days late", -daysLeft)
+	case daysLeft == 1:
+		return "in 1 day"
+	}
+	return fmt.Sprintf("in %d days", daysLeft)
 }

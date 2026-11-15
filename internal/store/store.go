@@ -51,6 +51,8 @@ type state struct {
 	Changes   []core.Change             `json:"changes"`
 	// Jobs are one-off ad-hoc jobs at sites, apart from the PM tasks.
 	Jobs []core.Job `json:"jobs,omitempty"`
+	// Findings are things found at sites, followed until closed.
+	Findings []core.Finding `json:"findings,omitempty"`
 	// Audit is where the activity log was kept before it moved to its own
 	// files; read once to move old entries over, then always empty.
 	Audit  []AuditEntry `json:"audit,omitempty"`
@@ -139,9 +141,53 @@ func (st *state) normalize() {
 	for _, j := range st.Jobs {
 		high = max(high, j.ID)
 	}
+	for _, f := range st.Findings {
+		high = max(high, f.ID)
+	}
 	if st.NextID <= high {
 		st.NextID = high + 1
 	}
+	st.tidyFindings()
+}
+
+// tidyFindings keeps findings in step with the catalog: a deleted site's
+// findings go with it, a deleted PM task's findings stay at the site, and
+// a link to a finding that's gone is dropped.
+func (st *state) tidyFindings() {
+	var out []core.Finding
+	ids := map[int]bool{}
+	for _, f := range st.Findings {
+		if _, ok := st.Catalog.Site(f.SiteID); !ok {
+			continue
+		}
+		if t, ok := st.Catalog.Task(f.TaskID); f.TaskID != "" && (!ok || t.SiteID != f.SiteID) {
+			f.TaskID = ""
+		}
+		out = append(out, f)
+		ids[f.ID] = true
+	}
+	for i := range out {
+		if !ids[out[i].RepeatOf] {
+			out[i].RepeatOf = 0
+		}
+	}
+	st.Findings = out
+}
+
+// checkFindings reports the first finding in a backup that doesn't check out.
+func checkFindings(findings []core.Finding) error {
+	seen := map[int]bool{}
+	for i := range findings {
+		f := &findings[i]
+		if f.ID < 1 || seen[f.ID] {
+			return fmt.Errorf("two findings share the number %d", f.ID)
+		}
+		seen[f.ID] = true
+		if err := f.Clean(); err != nil {
+			return fmt.Errorf("finding #%d: %v", f.ID, err)
+		}
+	}
+	return nil
 }
 
 // checkJobs reports the first ad-hoc job in a backup that doesn't check out.
@@ -193,6 +239,9 @@ func (s *Store) Restore(b []byte, by, action string) error {
 	}
 	if err := checkJobs(st.Jobs); err != nil {
 		return fmt.Errorf("the backup's ad-hoc jobs don't check out: %v", err)
+	}
+	if err := checkFindings(st.Findings); err != nil {
+		return fmt.Errorf("the backup's findings don't check out: %v", err)
 	}
 	st.normalize()
 	s.mu.Lock()
@@ -364,6 +413,7 @@ func (s *Store) cleanup() {
 		}
 	}
 	s.st.Jobs = jobs
+	s.st.tidyFindings()
 
 	cals := map[string]bool{}
 	for _, c := range s.st.Catalog.Calendars {
@@ -393,6 +443,7 @@ func (s *Store) Inputs() core.Inputs {
 		Manual:    append([]core.ManualVisit(nil), s.st.Manual...),
 		Changes:   append([]core.Change(nil), s.st.Changes...),
 		Jobs:      append([]core.Job(nil), s.st.Jobs...),
+		Findings:  append([]core.Finding(nil), s.st.Findings...),
 	}
 	for _, e := range s.st.Events {
 		in.Events = append(in.Events, e)
@@ -697,6 +748,92 @@ func (s *Store) DeleteJob(id int, by string, action func(core.Job) string) (core
 		return j, nil
 	}
 	return core.Job{}, ErrNoJob
+}
+
+// ErrNoFinding means the finding doesn't exist (any more).
+var ErrNoFinding = errors.New("that finding no longer exists")
+
+// AddFinding checks and saves a new finding, and returns it with its number.
+func (s *Store) AddFinding(f core.Finding, action func(core.Finding) string) (core.Finding, error) {
+	if err := f.Clean(); err != nil {
+		return core.Finding{}, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	f.ID = s.st.NextID
+	if err := f.CheckLinks(&s.st.Catalog, s.st.Findings); err != nil {
+		return core.Finding{}, err
+	}
+	s.st.NextID++
+	s.st.Findings = append(s.st.Findings, f)
+	if a := action(f); a != "" {
+		s.audit(f.By, a)
+	}
+	if err := s.save(); err != nil {
+		s.st.Findings = s.st.Findings[:len(s.st.Findings)-1]
+		s.st.NextID--
+		return core.Finding{}, err
+	}
+	return f, nil
+}
+
+// UpdateFinding applies fn to a copy of a finding, checks it and saves it.
+// The finding stays at its site. The action is formatted with the finding
+// as it was and as it is after fn.
+func (s *Store) UpdateFinding(id int, by string, action func(old, f core.Finding) string, fn func(*core.Finding) error) (core.Finding, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i, old := range s.st.Findings {
+		if old.ID != id {
+			continue
+		}
+		f := old
+		if err := fn(&f); err != nil {
+			return old, err
+		}
+		f.ID, f.SiteID, f.By, f.Created = old.ID, old.SiteID, old.By, old.Created
+		if err := f.Clean(); err != nil {
+			return old, err
+		}
+		if err := f.CheckLinks(&s.st.Catalog, s.st.Findings); err != nil {
+			return old, err
+		}
+		s.st.Findings[i] = f
+		s.audit(by, action(old, f))
+		if err := s.save(); err != nil {
+			s.st.Findings[i] = old
+			return old, err
+		}
+		return f, nil
+	}
+	return core.Finding{}, ErrNoFinding
+}
+
+// DeleteFinding removes a finding and returns what it was. Findings that
+// were recorded as repeats of it are kept, without the link.
+func (s *Store) DeleteFinding(id int, by string, action func(core.Finding) string) (core.Finding, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i, f := range s.st.Findings {
+		if f.ID != id {
+			continue
+		}
+		prev := s.st.Findings
+		next := append(append([]core.Finding(nil), prev[:i]...), prev[i+1:]...)
+		for k := range next {
+			if next[k].RepeatOf == id {
+				next[k].RepeatOf = 0
+			}
+		}
+		s.st.Findings = next
+		s.audit(by, action(f))
+		if err := s.save(); err != nil {
+			s.st.Findings = prev
+			return f, err
+		}
+		return f, nil
+	}
+	return core.Finding{}, ErrNoFinding
 }
 
 // Users returns the accounts stored in the data file.

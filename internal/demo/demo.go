@@ -363,3 +363,81 @@ func Jobs(now time.Time, loc *time.Location) []core.Job {
 		{SiteID: "hkt1", Title: "Clear condensate drain, CRAC 2", Date: d(-9), Who: "Andaman HVAC", Status: core.JobDone, DoneOn: d(-8), DoneBy: "demo", By: "demo", Created: now.AddDate(0, 0, -12)},
 	}
 }
+
+// SeedFindings adds findings around today through add: open, in progress
+// and closed ones at several sites, one past its target, and a CRAC alarm
+// at CNX1 that keeps coming back because the fix never reached the cause.
+func SeedFindings(cat core.Catalog, now time.Time, loc *time.Location, add func(core.Finding) (core.Finding, error)) error {
+	today := core.Day(now, loc)
+	d := func(n int) string { return today.AddDate(0, 0, n).Format("2006-01-02") }
+	task := func(site, system string) string {
+		for _, t := range cat.TasksAt(site) {
+			if t.System == system {
+				return t.ID
+			}
+		}
+		return ""
+	}
+	type seed struct {
+		core.Finding
+		repeat int // index of the finding in this list it repeats, plus one
+	}
+	f := func(site, system, found, kind, severity, title string) core.Finding {
+		return core.Finding{SiteID: site, TaskID: task(site, system), FoundOn: found, Kind: kind, Severity: severity, Title: title,
+			Status: core.FindingOpen, By: "demo", Created: today.AddDate(0, 0, -1)}
+	}
+	with := func(x core.Finding, mod func(*core.Finding)) core.Finding { mod(&x); return x }
+	closed := func(x core.Finding, on, action string) core.Finding {
+		x.Status, x.ClosedOn, x.ClosedBy, x.Action = core.FindingClosed, on, "demo", action
+		return x
+	}
+	seeds := []seed{
+		{Finding: with(f("bkk1", "ups", d(-24), "equipment", "high", "Battery string 2: three cells over the internal-resistance limit"), func(x *core.Finding) {
+			x.Reading, x.Owner, x.Due, x.Spread = "6.1 to 6.4 mΩ, limit 5.5", "ABC Power", d(-3), "todo"
+			x.Detail = "Cells 3, 7 and 11. ABC Power to quote a replacement string. Same battery batch went to BKK2 and CBI1."
+		})},
+		{Finding: with(f("bkk1", "crac", d(-24), "equipment", "medium", "CRAC 2 supply air 2 °C above setpoint"), func(x *core.Finding) {
+			x.Reading, x.Owner, x.Due, x.Status = "Supply 20 °C, setpoint 18 °C", "CoolAir Services", d(10), core.FindingDoing
+			x.Cause = "Filters clogged early: the room has been dustier since the renovation next door, and filters are changed every 6 months."
+		})},
+		{Finding: closed(with(f("cnx1", "crac", d(-190), "equipment", "high", "CRAC 1 high-pressure alarm"), func(x *core.Finding) {
+			x.Owner, x.Due = "Northern Cooling", d(-186)
+		}), d(-187), "Condenser coil cleaned.")},
+		{Finding: closed(with(f("cnx1", "crac", d(-100), "equipment", "high", "CRAC 1 high-pressure alarm again"), func(x *core.Finding) {
+			x.Owner, x.Due = "Northern Cooling", d(-97)
+			x.Cause = "Condenser coil clogged with dust from the building site next to the outdoor unit."
+		}), d(-94), "Coil cleaned again."), repeat: 3},
+		{Finding: with(f("cnx1", "crac", d(-8), "equipment", "high", "CRAC 1 high-pressure alarm, third time"), func(x *core.Finding) {
+			x.Owner, x.Due = "Northern Cooling", d(6)
+			x.Detail = "Same alarm as the last two PM rounds. Cleaning the coil hasn't stopped it."
+			x.Cause = "Dust from the building site still reaches the condenser. Cleaning treats the symptom."
+		}), repeat: 4},
+		{Finding: closed(with(f("bkk2", "", d(-40), "5s", "low", "Cardboard boxes stored behind rack row B"), func(x *core.Finding) {
+			x.Owner, x.Due, x.Spread = "Facility team", d(-33), "todo"
+			x.Cause = "No place to put packaging after installs, so it stayed in the room."
+		}), d(-38), "Removed. Packaging now goes to the store room the same day; added to the PM walk-round checklist.")},
+		{Finding: closed(with(f("hkt1", "", d(-60), "safety", "medium", "Fire extinguisher inspection tags expired"), func(x *core.Finding) {
+			x.Owner, x.Due, x.Spread = "Facility team", d(-46), "done"
+		}), d(-50), "Extinguishers re-inspected. Tag dates added to the yearly checklist; checked at all sites.")},
+		{Finding: closed(with(f("nma1", "dc", d(-70), "equipment", "medium", "Rectifier module 3 fan noisy"), func(x *core.Finding) {
+			x.Owner, x.Due = "VoltEdge Power", d(-40)
+		}), d(-30), "Fan replaced by VoltEdge on the next visit.")},
+		{Finding: with(f("kkc1", "", d(-15), "idea", "low", "Ask vendors for readings as numbers, not ticks"), func(x *core.Finding) {
+			x.Owner, x.Spread = "PM coordinator", "todo"
+			x.Detail = "UPS and DC reports only tick OK. Ask for battery voltage and internal resistance per string, so trends show before a cell fails."
+		})},
+		{Finding: f("hdy1", "ups", d(-5), "5s", "low", "UPS bypass breaker has no label")},
+	}
+	ids := make([]int, len(seeds))
+	for i, s := range seeds {
+		if s.repeat > 0 {
+			s.RepeatOf = ids[s.repeat-1]
+		}
+		saved, err := add(s.Finding)
+		if err != nil {
+			return fmt.Errorf("demo finding %q: %w", s.Title, err)
+		}
+		ids[i] = saved.ID
+	}
+	return nil
+}

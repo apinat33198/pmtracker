@@ -94,6 +94,10 @@ func (s *Server) Handler() (http.Handler, error) {
 	handle("GET /events", v, s.events)
 	handle("GET /jobs", v, s.jobsPage)
 	handle("GET /jobs.csv", v, s.jobsCSV)
+	handle("GET /findings", v, s.findingsPage)
+	handle("GET /findings.csv", v, s.findingsCSV)
+	handle("GET /findings/new", e, s.newFinding)
+	handle("GET /findings/{id}", v, s.findingPage)
 	handle("GET /export.csv", v, s.exportCSV)
 	handle("GET /digest.txt", v, s.digestText)
 	handle("GET /account", v, s.accountPage)
@@ -113,6 +117,10 @@ func (s *Server) Handler() (http.Handler, error) {
 	handle("POST /jobs/{id}/done", e, s.jobDone)
 	handle("POST /jobs/{id}/reopen", e, s.jobReopen)
 	handle("POST /jobs/{id}/delete", e, s.deleteJob)
+	handle("POST /findings", e, s.addFinding)
+	handle("POST /findings/{id}", e, s.editFinding)
+	// Findings are audit evidence (ISO 27001 clause 10.2), so only admins delete them.
+	handle("POST /findings/{id}/delete", a, s.deleteFinding)
 
 	handle("GET /admin", a, func(w http.ResponseWriter, r *http.Request) { http.Redirect(w, r, "/admin/sites", http.StatusSeeOther) })
 	handle("GET /admin/sites", a, s.adminSites)
@@ -161,30 +169,46 @@ func (s *Server) Handler() (http.Handler, error) {
 func (s *Server) parse() error {
 	loc := s.Cfg.Location()
 	funcs := template.FuncMap{
-		"date":       func(t time.Time) string { return fmtDate(t, "2 Jan 2006") },
-		"dateShort":  func(t time.Time) string { return fmtDate(t, "Mon 2 Jan") },
-		"dm":         func(t time.Time) string { return fmtDate(t, "2 Jan") },
-		"dateTime":   func(t time.Time) string { return fmtDate(t.In(loc), "2 Jan 2006, 15:04") },
-		"iso":        func(t time.Time) string { return fmtDate(t, "2006-01-02") },
-		"ago":        func(t time.Time) string { return ago(t, s.Now()) },
-		"rel":        relDays,
-		"dueRel":     dueRel,
-		"dueShort":   dueShort,
-		"offset":     offsetText,
-		"fromToday":  func(t time.Time) string { return relDays(core.DaysBetween(core.Day(s.Now(), loc), t)) },
-		"sinceDays":  func(t time.Time) int { return core.DaysBetween(t, core.Day(s.Now(), loc)) },
-		"plural":     plural,
-		"join":       strings.Join,
-		"has":        func(list []string, v string) bool { return slices.Contains(list, v) },
-		"ribbon":     func(f core.Forecast) template.HTML { return forecastSVG(f, rowRibbon) },
-		"bigRibbon":  func(f core.Forecast) template.HTML { return forecastSVG(f, assetRibbon) },
-		"axis":       axisSVG,
-		"add":        func(a, b int) int { return a + b },
-		"taskLabel":  func(cat *core.Catalog, id string) string { return cat.TaskLabel(id) },
-		"statuses":   func() []core.Status { return core.AllStatuses },
-		"count":      func(m map[core.Status]int, s string) int { return m[core.Status(s)] },
-		"newVendor":  func() string { return newVendorOption },
-		"asset":      assetURL,
+		"date":              func(t time.Time) string { return fmtDate(t, "2 Jan 2006") },
+		"dateShort":         func(t time.Time) string { return fmtDate(t, "Mon 2 Jan") },
+		"dm":                func(t time.Time) string { return fmtDate(t, "2 Jan") },
+		"dateTime":          func(t time.Time) string { return fmtDate(t.In(loc), "2 Jan 2006, 15:04") },
+		"iso":               func(t time.Time) string { return fmtDate(t, "2006-01-02") },
+		"ago":               func(t time.Time) string { return ago(t, s.Now()) },
+		"rel":               relDays,
+		"dueRel":            dueRel,
+		"dueShort":          dueShort,
+		"offset":            offsetText,
+		"fromToday":         func(t time.Time) string { return relDays(core.DaysBetween(core.Day(s.Now(), loc), t)) },
+		"sinceDays":         func(t time.Time) int { return core.DaysBetween(t, core.Day(s.Now(), loc)) },
+		"plural":            plural,
+		"join":              strings.Join,
+		"has":               func(list []string, v string) bool { return slices.Contains(list, v) },
+		"ribbon":            func(f core.Forecast) template.HTML { return forecastSVG(f, rowRibbon) },
+		"bigRibbon":         func(f core.Forecast) template.HTML { return forecastSVG(f, assetRibbon) },
+		"axis":              axisSVG,
+		"add":               func(a, b int) int { return a + b },
+		"taskLabel":         func(cat *core.Catalog, id string) string { return cat.TaskLabel(id) },
+		"statuses":          func() []core.Status { return core.AllStatuses },
+		"count":             func(m map[core.Status]int, s string) int { return m[core.Status(s)] },
+		"newVendor":         func() string { return newVendorOption },
+		"asset":             assetURL,
+		"findingKinds":      func() []core.Choice { return core.FindingKinds },
+		"findingSeverities": func() []core.Choice { return core.FindingSeverities },
+		"findingStatuses":   func() []core.Choice { return core.FindingStatuses },
+		"findingSpreads":    func() []core.Choice { return core.FindingSpreads },
+		"pct": func(n int) string {
+			if n < 0 {
+				return "–"
+			}
+			return strconv.Itoa(n) + "%"
+		},
+		"days": func(n int) string {
+			if n < 0 {
+				return "–"
+			}
+			return strconv.Itoa(n)
+		},
 		"size":       sizeText,
 		"backupKind": backupKind,
 		"backupWhen": backupWhen,
@@ -428,6 +452,9 @@ type siteData struct {
 	DoneJobs []core.JobView
 	MoreDone int
 	Who      []string
+	// Findings are the site's open findings; AllFindings counts closed ones too.
+	Findings    []core.FindingView
+	AllFindings int
 }
 
 // siteDoneJobs is how many done ad-hoc jobs a site page lists.
@@ -442,6 +469,12 @@ func (s *Server) sitePage(w http.ResponseWriter, r *http.Request) {
 	}
 	d := siteData{S: ss, Today: snap.Today, Vendors: siteVendors(*snap.Catalog, ss.Site.ID), Who: whoOptions(snap)}
 	d.OpenJobs, d.DoneJobs = snap.JobsAt(ss.Site.ID)
+	for _, f := range snap.FindingsAt(ss.Site.ID) {
+		d.AllFindings++
+		if f.IsOpen() {
+			d.Findings = append(d.Findings, f)
+		}
+	}
 	if len(d.DoneJobs) > siteDoneJobs {
 		d.MoreDone = len(d.DoneJobs) - siteDoneJobs
 		d.DoneJobs = d.DoneJobs[:siteDoneJobs]
@@ -470,10 +503,15 @@ func (s *Server) sitePage(w http.ResponseWriter, r *http.Request) {
 }
 
 type taskData struct {
-	F      core.Forecast
-	Vendor core.Vendor
-	Today  time.Time
+	F        core.Forecast
+	Vendor   core.Vendor
+	Today    time.Time
+	Findings []core.FindingView // open ones, then the most recently closed
+	More     int
 }
+
+// taskFindings is how many findings a task page lists.
+const taskFindings = 15
 
 func (s *Server) taskPage(w http.ResponseWriter, r *http.Request) {
 	snap := s.snapshot()
@@ -483,7 +521,12 @@ func (s *Server) taskPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	v, _ := snap.Catalog.Vendor(f.Task.Vendor)
-	s.render(w, r, "task", "overview", snap.Catalog.TaskLabel(f.Task.ID), snap, taskData{F: f, Vendor: v, Today: snap.Today})
+	d := taskData{F: f, Vendor: v, Today: snap.Today, Findings: snap.FindingsFor(f.Task.ID)}
+	if len(d.Findings) > taskFindings {
+		d.More = len(d.Findings) - taskFindings
+		d.Findings = d.Findings[:taskFindings]
+	}
+	s.render(w, r, "task", "overview", snap.Catalog.TaskLabel(f.Task.ID), snap, d)
 }
 
 func (s *Server) inbox(w http.ResponseWriter, r *http.Request) {

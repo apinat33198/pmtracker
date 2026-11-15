@@ -303,6 +303,14 @@ func demoSeed(ctx context.Context, sy *gcal.Syncer, st *store.Store, cfg *config
 			st.AddJob(j, "")
 		}
 	}
+	if len(st.Inputs().Findings) == 0 {
+		err := demo.SeedFindings(st.Catalog(), now(), cfg.Location(), func(f core.Finding) (core.Finding, error) {
+			return st.AddFinding(f, func(core.Finding) string { return "" })
+		})
+		if err != nil {
+			log.Printf("demo: %v", err)
+		}
+	}
 }
 
 // check verifies credentials and calendar access without touching the store.

@@ -558,3 +558,35 @@ h2 .h-link { font-size: 13px; font-weight: 500; margin-left: 10px; }
 .combo-none { color: var(--ink-3) !important; cursor: default !important; }
 .combo-new { color: var(--brand); }
 .combo-new[hidden] { display: none; }
+
+/* Findings */
+.tools { display: flex; gap: 8px; flex-wrap: wrap; }
+.kpis { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 1px; margin: 0 0 20px; background: var(--rule); border: 1px solid var(--rule); border-radius: var(--radius); overflow: hidden; }
+.kpis div { background: var(--surface); padding: 10px 14px 12px; border-top: 3px solid var(--sc, transparent); }
+.kpis dt { color: var(--ink-2); font-size: 12.5px; }
+.kpis dd { margin: 0; }
+.kpis .kpi { font-size: 26px; font-weight: 650; line-height: 1.25; color: var(--sc, var(--ink)); font-variant-numeric: tabular-nums; }
+.sev { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--sc); white-space: nowrap; }
+.sev::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--sc); }
+.verdict .sev { margin-left: 8px; }
+.finding-groups th.num, .finding-groups td.num { width: 96px; }
+.findings .warn { color: var(--off_cycle); font-weight: 600; }
+.findings tr.is-current td { background: var(--bg); }
+.findings tr.is-current .task-name { color: var(--ink); text-decoration: none; }
+.finding-text { display: grid; gap: 1px; margin: 14px 0 0; background: var(--rule); border: 1px solid var(--rule); border-radius: var(--radius); overflow: hidden; }
+.finding-text div { display: grid; grid-template-columns: 140px 1fr; gap: 14px; background: var(--surface); padding: 10px 14px; }
+.finding-text dt { color: var(--ink-2); font-size: 12.5px; padding-top: 2px; }
+.finding-text dd { margin: 0; white-space: pre-wrap; max-width: 80ch; }
+.finding-form fieldset { margin: 0 0 6px; }
+.finding-form fieldset + fieldset { padding-top: 14px; border-top: 1px solid var(--rule); }
+.finding-form textarea { font: inherit; font-weight: 400; }
+td.actions a.button { padding: 4px 10px; font-size: 13px; font-weight: 600; margin-left: 6px; }
+form.danger { margin-top: 28px; }
+@media (max-width: 960px) {
+  .kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 760px) {
+  .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .finding-text div { grid-template-columns: 1fr; gap: 2px; }
+  td.actions a.button { margin: 0 6px 0 0; }
+}
