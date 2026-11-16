@@ -8,35 +8,44 @@
 <link rel="icon" href="{{asset "icon.svg"}}" type="image/svg+xml">
 <script src="{{asset "pick.js"}}" defer></script>
 </head>
-<body>
+<body{{if .Bare}} class="bare"{{end}}>
+<a class="skip" href="#main">Skip to content</a>
 <header class="top">
-  <a class="brand" href="/"><svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><rect x="3" y="2" width="16" height="18" rx="3" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="11" cy="6.5" r="1.6" fill="currentColor"/><path d="M7 12h8M7 15.5h5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>PM Tracker</a>
+ <div class="top-in">
+  <a class="brand" href="/"><span class="brand-mark" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 22 22"><rect x="3.5" y="2.5" width="15" height="17" rx="3" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="11" cy="7" r="1.7" fill="currentColor"/><path d="M7.5 12h7M7.5 15.5h4.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span><span class="brand-name">PM Tracker</span></a>
   {{if not .Bare}}
   <nav class="nav" aria-label="Main">
-    <a href="/"{{if eq .Nav "overview"}} aria-current="page"{{end}}>Overview</a>
-    <a href="/inbox"{{if eq .Nav "inbox"}} aria-current="page"{{end}}>Review inbox{{with len .Snap.Inbox}} <span class="count">{{.}}</span>{{end}}</a>
-    <a href="/jobs"{{if eq .Nav "jobs"}} aria-current="page"{{end}}>Jobs{{with len .Snap.OpenJobs}} <span class="count">{{.}}</span>{{end}}</a>
-    <a href="/events"{{if eq .Nav "events"}} aria-current="page"{{end}}>Events</a>
-    {{if .IsAdmin}}<a href="/admin/sites"{{if eq .Nav "admin"}} aria-current="page"{{end}}>Admin</a>{{end}}
+    <a href="/"{{if eq .Nav "overview"}} aria-current="page"{{end}}><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="2" width="5" height="5" rx="1.2"/><rect x="9" y="2" width="5" height="5" rx="1.2"/><rect x="2" y="9" width="5" height="5" rx="1.2"/><rect x="9" y="9" width="5" height="5" rx="1.2"/></svg>Overview</a>
+    <a href="/inbox"{{if eq .Nav "inbox"}} aria-current="page"{{end}}><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 9.5V12a1.5 1.5 0 0 0 1.5 1.5h9A1.5 1.5 0 0 0 14 12V9.5M2 9.5l1.7-5.6a1.3 1.3 0 0 1 1.2-.9h6.2a1.3 1.3 0 0 1 1.2.9L14 9.5M2 9.5h3.4l1 1.6h3.2l1-1.6H14"/></svg>Review inbox{{with len .Snap.Inbox}} <span class="count">{{.}}</span>{{end}}</a>
+    <a href="/jobs"{{if eq .Nav "jobs"}} aria-current="page"{{end}}><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="3" y="2.5" width="10" height="11.5" rx="1.5"/><path d="M6 1.8h4v2H6zM5.8 9.2l1.6 1.6 3.1-3.1"/></svg>Jobs{{with len .Snap.OpenJobs}} <span class="count">{{.}}</span>{{end}}</a>
+    <a href="/events"{{if eq .Nav "events"}} aria-current="page"{{end}}><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="3" width="12" height="11" rx="1.5"/><path d="M2 6.5h12M5.5 1.5v3M10.5 1.5v3"/></svg>Events</a>
+    {{if .IsAdmin}}<a href="/admin/sites"{{if eq .Nav "admin"}} aria-current="page"{{end}}><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11"/><circle cx="10.5" cy="4.5" r="1.6" class="knob"/><circle cx="5.5" cy="8" r="1.6" class="knob"/><circle cx="9" cy="11.5" r="1.6" class="knob"/></svg>Admin</a>{{end}}
   </nav>
-  <div class="top-right">
-    <span class="sync-state" title="{{if not .LastSync.IsZero}}{{dateTime .LastSync}}{{end}}">Synced {{ago .LastSync}}</span>
-    {{if .IsEditor}}<form method="post" action="/sync"><input type="hidden" name="back" value="{{.Back}}"><button type="submit" class="ghost">Sync now</button></form>{{end}}
-    {{if .User.SignedIn}}
-    <span class="who"><a href="/account"{{if eq .Nav "account"}} aria-current="page"{{end}} title="Your account">{{.User.Name}}</a> <span class="tag">{{.User.Role}}</span></span>
-    <form method="post" action="/logout"><button type="submit" class="ghost">Sign out</button></form>
-    {{else}}
-    <a class="button" href="/login?next={{.Back}}">Sign in</a>
-    {{end}}
+  <div class="top-sync">
+    <span class="sync-state{{if .SyncErrors}} bad{{end}}" title="{{if .SyncErrors}}Calendar sync is failing{{else if not .LastSync.IsZero}}Last synced {{dateTime .LastSync}}{{end}}"><i class="sync-dot" aria-hidden="true"></i><span class="sync-text">Synced {{ago .LastSync}}</span></span>
+    {{if .IsEditor}}<form method="post" action="/sync"><input type="hidden" name="back" value="{{.Back}}"><button type="submit" class="ghost sync-btn" title="Read the calendars now"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M13.3 6.2A5.5 5.5 0 0 0 3.2 5.1M2.7 9.8a5.5 5.5 0 0 0 10.1 1.1M13.3 2.3v3.9H9.4M2.7 13.7V9.8h3.9"/></svg><span>Sync now</span></button></form>{{end}}
   </div>
+  {{if .User.SignedIn}}
+  <details class="user-menu">
+    <summary title="Your account"><span class="avatar" aria-hidden="true">{{initial .User.Name}}</span><span class="user-name">{{.User.Name}}</span><svg class="chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 6.5 8 10l3.5-3.5"/></svg></summary>
+    <div class="menu">
+      <p class="menu-who"><span><b>{{.User.Name}}</b><span class="sub">Signed in</span></span><span class="tag">{{.User.Role}}</span></p>
+      <a href="/account"{{if eq .Nav "account"}} aria-current="page"{{end}}>Your account</a>
+      <form method="post" action="/logout"><button type="submit" class="menu-item">Sign out</button></form>
+    </div>
+  </details>
+  {{else}}
+  <a class="button signin" href="/login?next={{.Back}}">Sign in</a>
   {{end}}
+  {{end}}
+ </div>
 </header>
-{{if .Demo}}<p class="demo-bar">Demo data: 21 sites with events generated around today. {{if .User.SignedIn}}Changes you make are saved to the demo data file.{{else}}Anyone can look; sign in as admin, editor or viewer (password <b>demo</b>) to make changes.{{end}}</p>{{end}}
+{{if .Demo}}<p class="demo-bar"><span class="demo-tag">Demo</span> 21 sites with events generated around today. {{if .User.SignedIn}}Changes you make are saved to the demo data file.{{else}}Anyone can look; sign in as admin, editor or viewer (password <b>demo</b>) to make changes.{{end}}</p>{{end}}
 <div class="flashes">
 {{range .SyncErrors}}<p class="flash error" role="alert">Calendar sync is failing. {{.}}</p>{{end}}
 {{with .Msg}}<p class="flash {{$.MsgKind}}" role="status">{{.}}</p>{{end}}
 </div>
-<main>
+<main id="main">
 {{template "content" .}}
 </main>
 <script>
@@ -54,6 +63,15 @@
   document.addEventListener("change", function (e) {
     var sel = e.target.closest && e.target.closest("select[data-new-box]");
     if (sel) { var box = sync(sel); if (box) box.querySelector("input").focus(); }
+  });
+})();
+// Close the account menu on a click elsewhere or Escape.
+(function () {
+  var menu = document.querySelector(".user-menu");
+  if (!menu) return;
+  document.addEventListener("click", function (e) { if (menu.open && !menu.contains(e.target)) menu.open = false; });
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape" && menu.open) { menu.open = false; menu.querySelector("summary").focus(); }
   });
 })();
 </script>

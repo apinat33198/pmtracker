@@ -188,6 +188,12 @@ func (s *Server) parse() error {
 		"size":       sizeText,
 		"backupKind": backupKind,
 		"backupWhen": backupWhen,
+		"initial": func(s string) string { // first letter of a name, for the account badge
+			for _, r := range s {
+				return strings.ToUpper(string(r))
+			}
+			return "?"
+		},
 		"tel": func(s string) string {
 			return strings.Map(func(r rune) rune {
 				if r == '+' || (r >= '0' && r <= '9') {

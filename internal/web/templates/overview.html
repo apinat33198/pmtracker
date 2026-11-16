@@ -7,6 +7,11 @@
   <a class="button ghost" href="/export.csv">Export CSV</a>
 </section>
 
+<nav class="chips kpis" aria-label="Filter by status">
+  {{range $d.Chips}}<a class="chip s-{{.Status}}{{if .Active}} on{{end}}{{if not .Count}} is-zero{{end}}" href="{{.Href}}"{{if .Active}} aria-current="true"{{end}}><span class="kpi-label"><i class="dot"></i>{{.Status.Label}}</span> <b>{{.Count}}</b></a>
+  {{end}}
+</nav>
+
 <form class="filters" method="get" action="/">
   <label>Region <select name="region"><option value="">All regions</option>{{range $d.Regions}}<option{{if eq . $d.Region}} selected{{end}}>{{.}}</option>{{end}}</select></label>
   <label>System <select name="system"><option value="">All systems</option>{{range .Snap.Systems}}<option value="{{.Key}}"{{if eq .Key $d.System}} selected{{end}}>{{.Name}}</option>{{end}}</select></label>
@@ -16,10 +21,6 @@
   {{if $d.Filtered}}<a href="/">Clear filters</a>{{end}}
 </form>
 
-<nav class="chips" aria-label="Filter by status">
-  {{range $d.Chips}}<a class="chip s-{{.Status}}{{if .Active}} on{{end}}" href="{{.Href}}"><i class="dot"></i>{{.Status.Label}} <b>{{.Count}}</b></a>
-  {{end}}
-</nav>
 {{if .Snap.Unconfirmed}}<p class="note">{{.Snap.Unconfirmed}} past {{plural .Snap.Unconfirmed "visit is" "visits are"}} waiting for someone to confirm it happened. Open a site to confirm or mark them missed.</p>{{end}}
 
 <div class="matrix-wrap{{if le (len $d.Systems) 6}} fits{{end}}">
