@@ -34,6 +34,11 @@
 {{end}}
 {{with $d.Paused}}<p class="hint">Paused: {{range $i, $t := .}}{{if $i}}, {{end}}{{$cat.SystemName $t.System}} by {{$cat.VendorName $t.Vendor}}{{end}}. Paused tasks get no forecast or reminders.</p>{{end}}
 
+<h2 id="findings">Findings</h2>
+<p class="hint">What PM visits and walks round this room turned up, until it's fixed.{{if $d.AllFindings}} <a href="/findings?site={{$ss.Site.ID}}&amp;status=all">All {{$d.AllFindings}} {{plural $d.AllFindings "finding" "findings"}} at this site</a>, with repeats and days to close.{{end}}</p>
+{{template "findings" (dict "List" $d.Findings "Page" . "Empty" "No open findings at this site." "Current" 0)}}
+{{if .IsEditor}}<p class="hint small"><a class="button ghost" href="/findings/new?site={{$ss.Site.ID}}">Log a finding</a></p>{{end}}
+
 <h2 id="jobs">Ad-hoc jobs</h2>
 <p class="hint">One-off work at this site, such as a repair. Jobs don't change any PM date or status.</p>
 {{template "jobs" (dict "Jobs" $d.OpenJobs "Page" . "Actions" true "Empty" "No open jobs at this site.")}}

@@ -19,6 +19,8 @@ overview.
   digest. Jobs are kept apart from PM: they never change a PM date, status,
   the grid or the vendor counts. Editors and admins add and close them;
   everything is in the activity log, the backups and the Jobs CSV.
+- **Findings (Kaizen):** what PM visits and walks round the rooms turn up,
+  followed until it's fixed. See [Findings](#findings) below.
 - **Admin:** add, rename, archive and delete sites; add, edit, pause and
   delete PM tasks; set last PM dates; manage vendors, systems and calendars;
   import sites and tasks from CSV; activity log of who changed what. The
@@ -151,6 +153,40 @@ also matches titles that mean "data centre".
 - Month arithmetic clamps: 30 Nov + 3 months = 28 Feb.
 - Past calendar visits count as done until someone marks them missed.
   Cancelled events don't count.
+
+## Findings
+
+A finding is something found at a site: a fault or a reading out of limits,
+a housekeeping (5S) or safety problem, or an idea for doing it better. PM
+records *when* the vendor came; findings record *what they found* and what
+was done about it, which is the Check and Act half of the PDCA cycle that
+every 3-month PM round already is.
+
+- **Log one** with *Log finding* on any past visit (date, site and system
+  filled in), from a site or task page, or from the Findings page. Each has
+  a kind, a severity (high, medium, low), the reading with its limit, who
+  fixes it and a target date.
+- **Close it** with what was done; closing without that is refused, so every
+  closed finding says how it was handled. Add the root cause (ask why until
+  you reach something you can fix).
+- **Repeats:** when the same thing comes back at a site, use *Log this
+  coming back* on the earlier finding. Its page then shows every time it
+  came back. A finding that keeps coming back means the fix didn't reach the
+  cause.
+- **Other sites (yokoten):** mark a finding *Check the other sites* when the
+  same thing could be elsewhere (a battery batch, a storage habit), and
+  *Other sites checked* once done. The Findings page counts the ones left.
+- **Measures** on the Findings page, for all sites or one: open (and high),
+  past target, median days to close, closed on time, repeat share, and
+  other sites to check, over the last 12 months; then a table by site and
+  one by vendor. Findings past their target go in the daily digest.
+- Findings never change a PM date, status or the grid. Editors and admins
+  log and close them; only admins delete them (close a finding instead: it's
+  the record that the problem was handled, which ISO 27001 clause 10.2
+  asks for). Everything is in the activity log, the backups and the
+  Findings CSV.
+- Deleting a site deletes its findings; deleting a PM task keeps its
+  findings at the site.
 
 ## Sign-in and users
 
@@ -413,10 +449,10 @@ internal/auth      password hashing, signed session cookies, failed sign-in limi
 internal/config    JSON config: server, Google, defaults, auth options, roles
 internal/core      catalog (sites, systems, vendors, tasks, calendars), matcher,
                    forecaster, snapshot with site and vendor roll-ups, ad-hoc
-                   jobs, CSV import, digest, ICS feed
+                   jobs, findings and their measures, CSV import, digest, ICS feed
 internal/gcal      service-account client, events.list paging, syncer with 410 recovery
 internal/store     JSON-file store: catalog, mirrored events, decisions, rules,
-                   marks, hand-recorded visits, ad-hoc jobs, change log, accounts and the
+                   marks, hand-recorded visits, ad-hoc jobs, findings, change log, accounts and the
                    session key; the activity log in its own daily files
 internal/backup    daily backups, pruning, restore input
 internal/web       pages, sign-in, setup, accounts, admin handlers, role checks,

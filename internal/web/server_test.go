@@ -135,6 +135,7 @@ func TestPagesRender(t *testing.T) {
 	e := demoServer(t, nil)
 	cat := e.store.Catalog()
 	paths := []string{"/", "/?region=South", "/?vendor=siamups&status=overdue", "/?system=crac", "/inbox", "/events", "/events?show=partial", "/jobs", "/jobs.csv",
+		"/findings", "/findings?status=all", "/findings.csv", "/findings/new", "/findings/new?site=bkk1",
 		"/export.csv", "/digest.txt", "/forecast.ics?token=demo", "/admin/sites", "/admin/vendors", "/admin/systems",
 		"/admin/calendars", "/admin/import", "/admin/activity", "/admin/import/template.csv", "/admin/backups", "/admin/users"}
 	for _, s := range cat.Sites {

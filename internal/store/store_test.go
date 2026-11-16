@@ -426,3 +426,157 @@ func TestActivityEntriesAreOneLine(t *testing.T) {
 		t.Errorf("server-log copy = %+v", copied)
 	}
 }
+
+func TestFindings(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "data.json")
+	s, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.SetClock(func() time.Time { return day("2026-11-04") })
+	s.UpdateCatalog("t", "", func(c *core.Catalog) error {
+		c.Sites = []core.Site{{ID: "bkk1", Code: "BKK1", Name: "Bang Na"}, {ID: "cnx1", Code: "CNX1", Name: "Chiang Mai"}}
+		c.Systems = core.DefaultSystems()
+		c.Vendors = []core.Vendor{{Key: "coolair", Name: "CoolAir"}}
+		c.AddTask(core.Task{SiteID: "bkk1", System: "crac", Vendor: "coolair"}) // t1
+		c.AddTask(core.Task{SiteID: "cnx1", System: "crac", Vendor: "coolair"}) // t2
+		return nil
+	})
+	label := func(f core.Finding) string { return fmt.Sprintf("#%d %s", f.ID, f.Title) }
+	f := func(site, task, found, title string) core.Finding {
+		return core.Finding{SiteID: site, TaskID: task, FoundOn: found, Kind: "equipment", Severity: "medium", Title: title, By: "nok"}
+	}
+	if _, err := s.AddFinding(f("bkk1", "t2", "2026-08-01", "x"), label); err == nil {
+		t.Error("a finding tied to another site's task should be refused")
+	}
+	if _, err := s.AddFinding(f("nope", "", "2026-08-01", "x"), label); err == nil {
+		t.Error("a finding at a site that doesn't exist should be refused")
+	}
+	a, err := s.AddFinding(f("bkk1", "t1", "2026-08-01", "High-pressure alarm"), label)
+	if err != nil || a.ID == 0 || a.Status != core.FindingOpen {
+		t.Fatalf("add = %+v, %v", a, err)
+	}
+	b := f("bkk1", "t1", "2026-11-01", "High-pressure alarm again")
+	b.RepeatOf = a.ID
+	if b, err = s.AddFinding(b, label); err != nil {
+		t.Fatal(err)
+	}
+	c, _ := s.AddFinding(f("cnx1", "t2", "2026-11-02", "Filter dirty"), label)
+
+	// An edit can't move a finding to another site or change who added it.
+	got, err := s.UpdateFinding(a.ID, "som", func(old, f core.Finding) string { return old.Status + " to " + f.Status }, func(f *core.Finding) error {
+		f.SiteID, f.By, f.Status, f.ClosedOn, f.ClosedBy, f.Action = "cnx1", "som", core.FindingClosed, "2026-08-10", "som", "Cleaned the coil"
+		return nil
+	})
+	if err != nil || got.SiteID != "bkk1" || got.By != "nok" || got.Status != core.FindingClosed {
+		t.Errorf("update = %+v, %v", got, err)
+	}
+	// Changes that don't check out leave the finding as it was.
+	if _, err := s.UpdateFinding(a.ID, "som", func(core.Finding, core.Finding) string { return "x" }, func(f *core.Finding) error { f.FoundOn = "2026-12-01"; return nil }); err == nil {
+		t.Error("moving a finding after its repeat should be refused")
+	}
+	if _, err := s.UpdateFinding(a.ID, "som", func(core.Finding, core.Finding) string { return "x" }, func(f *core.Finding) error { f.Action = " "; return nil }); err == nil {
+		t.Error("a closed finding needs what was done")
+	}
+	if _, err := s.UpdateFinding(999, "som", func(core.Finding, core.Finding) string { return "x" }, func(*core.Finding) error { return nil }); err != ErrNoFinding {
+		t.Errorf("missing finding = %v", err)
+	}
+
+	// Saved to disk and in backups.
+	s2, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fs := s2.Inputs().Findings; len(fs) != 3 || fs[0].Action != "Cleaned the coil" || fs[1].RepeatOf != a.ID {
+		t.Fatalf("reopened = %+v", fs)
+	}
+	exp, _ := s.Export()
+	if !strings.Contains(string(exp), `"Filter dirty"`) {
+		t.Error("backups should hold the findings")
+	}
+
+	// Deleting the first finding keeps its repeat, without the link.
+	if _, err := s.DeleteFinding(a.ID, "som", label); err != nil {
+		t.Fatal(err)
+	}
+	if fs := s.Inputs().Findings; len(fs) != 2 || fs[0].ID != b.ID || fs[0].RepeatOf != 0 {
+		t.Errorf("after delete: %+v", fs)
+	}
+	if _, err := s.DeleteFinding(a.ID, "som", label); err != ErrNoFinding {
+		t.Errorf("delete twice = %v", err)
+	}
+	if err := s.Restore(exp, "som", "Restored"); err != nil {
+		t.Fatal(err)
+	}
+	if fs := s.Inputs().Findings; len(fs) != 3 || fs[1].RepeatOf != a.ID {
+		t.Errorf("restore should bring it back with the link: %+v", fs)
+	}
+
+	// Deleting a PM task keeps its findings at the site; deleting a site
+	// deletes its findings, as it does its PM tasks.
+	s.UpdateCatalog("t", "Deleted the BKK1 CRAC task", func(c *core.Catalog) error {
+		c.Tasks = c.Tasks[1:]
+		return nil
+	})
+	if fs := s.Inputs().Findings; len(fs) != 3 || fs[0].TaskID != "" || fs[0].SiteID != "bkk1" || fs[2].TaskID != "t2" {
+		t.Errorf("after deleting t1: %+v", fs)
+	}
+	s.UpdateCatalog("t", "Deleted CNX1", func(c *core.Catalog) error {
+		c.Sites, c.Tasks = c.Sites[:1], nil
+		return nil
+	})
+	if fs := s.Inputs().Findings; len(fs) != 2 || fs[0].ID == c.ID || fs[1].ID == c.ID {
+		t.Errorf("after deleting cnx1: %+v", fs)
+	}
+
+	var log []string
+	s.Activity().Each(func(e AuditEntry) error { log = append(log, e.By+": "+e.Action); return nil })
+	for _, w := range []string{"nok: #1 High-pressure alarm", "nok: #2 High-pressure alarm again", "som: open to closed", "som: #1 High-pressure alarm"} {
+		found := false
+		for _, l := range log {
+			found = found || l == w
+		}
+		if !found {
+			t.Errorf("activity log is missing %q: %v", w, log)
+		}
+	}
+}
+
+func TestRestoreChecksFindings(t *testing.T) {
+	s, _ := Open(filepath.Join(t.TempDir(), "d.json"))
+	s.UpdateCatalog("t", "", func(c *core.Catalog) error {
+		c.Sites = []core.Site{{ID: "bkk1", Code: "BKK1", Name: "Bang Na"}}
+		return nil
+	})
+	s.AddFinding(core.Finding{SiteID: "bkk1", FoundOn: "2026-11-04", Kind: "5s", Severity: "low", Title: "Boxes"}, func(core.Finding) string { return "x" })
+	b, _ := s.Export()
+	craft := func(extra map[string]any) []byte {
+		var m map[string]any
+		json.Unmarshal(b, &m)
+		m["findings"] = append(m["findings"].([]any), extra)
+		out, _ := json.Marshal(m)
+		return out
+	}
+	for name, data := range map[string][]byte{
+		"invalid":          craft(map[string]any{"id": 9, "site_id": "bkk1", "found_on": "2026-11-04", "kind": "nope", "severity": "low", "title": "x", "status": "open"}),
+		"duplicate number": craft(map[string]any{"id": 1, "site_id": "bkk1", "found_on": "2026-11-04", "kind": "5s", "severity": "low", "title": "Twin", "status": "open"}),
+		"closed, no action": craft(map[string]any{"id": 9, "site_id": "bkk1", "found_on": "2026-11-04", "kind": "5s", "severity": "low", "title": "x",
+			"status": "closed", "closed_on": "2026-11-04"}),
+	} {
+		if err := s.Restore(data, "admin", "restore"); err == nil || !strings.Contains(err.Error(), "findings") {
+			t.Errorf("%s: restore = %v, want refused", name, err)
+		}
+	}
+	// Links to a missing finding or task are dropped, not refused.
+	ok := craft(map[string]any{"id": 9, "site_id": "bkk1", "task_id": "t42", "found_on": "2026-11-04", "kind": "5s", "severity": "low", "title": "x",
+		"status": "open", "repeat_of": 77})
+	if err := s.Restore(ok, "admin", "restore"); err != nil {
+		t.Fatal(err)
+	}
+	if fs := s.Inputs().Findings; len(fs) != 2 || fs[1].TaskID != "" || fs[1].RepeatOf != 0 {
+		t.Errorf("restored = %+v", fs)
+	}
+	if f, _ := s.AddFinding(core.Finding{SiteID: "bkk1", FoundOn: "2026-11-04", Kind: "5s", Severity: "low", Title: "Next"}, func(core.Finding) string { return "x" }); f.ID <= 9 {
+		t.Errorf("the next finding got number %d", f.ID)
+	}
+}

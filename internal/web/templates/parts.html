@@ -23,6 +23,7 @@
       <td data-label="From">{{if .Event}}<span>{{.Event.Summary}}</span><span class="sub">{{calLabel $p.Cat .Event.CalendarID}}{{if eq .Method "manual"}}, linked by hand{{else if eq .Method "series"}}, series rule{{else if eq .Method "title"}}, title rule{{end}}</span>{{range .Reschedules}}<span class="sub change">{{if eq .Field "start"}}Moved from {{.Old}} to {{.New}}, seen {{dm .At}}{{else}}Cancelled by the organizer, seen {{dm .At}}{{end}}</span>{{end}}{{else}}<span>Recorded by hand</span>{{with .Note}}<span class="sub">{{.}}</span>{{end}}{{end}}</td>
       {{if $.ShowTasks}}<td data-label="Covers">{{range $i, $t := .Tasks}}{{if $i}}, {{end}}<a href="/tasks/{{$t}}">{{taskLabel $p.Cat $t}}</a>{{end}}</td>{{end}}
       <td class="actions">{{if $p.IsEditor}}
+        {{if .Status.Counts}}<a class="button ghost" href="/findings/new?visit={{.ID}}">Log finding</a>{{end}}
         {{if eq .Status "done_unconfirmed"}}
           <form method="post" action="/visits/mark"><input type="hidden" name="visit" value="{{.ID}}"><input type="hidden" name="status" value="done"><input type="hidden" name="back" value="{{$p.Back}}"><button>Confirm done</button></form>
           <form method="post" action="/visits/mark"><input type="hidden" name="visit" value="{{.ID}}"><input type="hidden" name="status" value="missed"><input type="hidden" name="back" value="{{$p.Back}}"><button class="ghost">Mark missed</button></form>
@@ -151,4 +152,64 @@
   <button>Add job</button>
 </form>
 <datalist id="job-who">{{range .Who}}<option value="{{.}}">{{end}}</datalist>
+{{end}}
+
+{{/* Findings. Expects dict "List", "Page" (the page data), "ShowSite",
+   "Empty" (text when there are none) and "Current" (a finding number to
+   mark, or 0). */}}
+{{define "findings"}}{{$p := .Page}}{{$show := .ShowSite}}{{$cur := .Current}}
+<table class="plain upcoming findings">
+  <thead><tr><th scope="col">Found</th><th scope="col">Finding</th><th scope="col">Severity</th><th scope="col">Status</th></tr></thead>
+  <tbody>
+  {{range .List}}
+    <tr class="s-{{.Tone}}{{if eq .ID $cur}} is-current{{end}}">
+      <td data-label="Found"><span class="strong">{{date .Found}}</span><span class="sub">{{if .IsOpen}}open {{.Age}} {{plural .Age "day" "days"}}{{else}}closed after {{.Age}} {{plural .Age "day" "days"}}{{end}}</span></td>
+      <td data-label="Finding"><a class="task-name" href="/findings/{{.ID}}">{{if $show}}<b>{{.Site.Code}}</b> {{end}}{{.Title}}</a><span class="sub">#{{.ID}}, {{if .HasTask}}{{$p.Cat.SystemName .Task.System}}, {{$p.Cat.VendorName .Task.Vendor}}{{else}}{{.KindLabel}}{{end}}{{with .Reading}}, {{.}}{{end}}{{if .RepeatOf}}, <span class="warn">repeat of #{{.RepeatOf}}</span>{{end}}{{with .Repeats}}, <span class="warn">came back {{len .}}×</span>{{end}}</span></td>
+      <td data-label="Severity"><span class="sev s-{{.SeverityTone}}">{{.SeverityLabel}}</span></td>
+      <td data-label="Status"><span class="pill s-{{.Tone}}">{{.StatusLabel}}</span>{{if .IsOpen}}{{if .HasDue}}<span class="sub{{if .Late}} late{{end}}">target {{dm .DueDay}}{{if .Late}}, {{dueRel .DaysLeft}}{{end}}</span>{{end}}{{with .Owner}}<span class="sub">{{.}}</span>{{end}}{{else if eq .Spread "todo"}}<span class="sub warn">Check the other sites</span>{{end}}</td>
+    </tr>
+  {{else}}
+    <tr><td colspan="4" class="empty">{{.Empty}}</td></tr>
+  {{end}}
+  </tbody>
+</table>
+{{end}}
+
+{{/* The add and edit form for a finding. Expects dict "Form" (a
+   findingForm) and "Page". */}}
+{{define "findingForm"}}{{$f := .Form}}{{$p := .Page}}{{$x := $f.F}}
+{{with $f.Error}}<p class="flash error" role="alert">{{.}}</p>{{end}}
+<form class="panel finding-form" method="post" action="{{if $f.New}}/findings{{else}}/findings/{{$x.ID}}{{end}}">
+  {{if $f.New}}<input type="hidden" name="site" value="{{$x.SiteID}}">{{end}}
+  <fieldset>
+    <legend>What was found</legend>
+    <div class="grid-4">
+      <label class="stack span-2">Finding <input name="title" value="{{$x.Title}}" required maxlength="200" placeholder="e.g. Battery string 2: three cells over the resistance limit"></label>
+      <label class="stack">Found on <input type="date" name="found_on" value="{{$x.FoundOn}}" max="{{iso $f.Today}}" required></label>
+      <label class="stack">PM task <select name="task"><option value="">Not from a PM task</option>{{range $f.Tasks}}<option value="{{.ID}}"{{if eq .ID $x.TaskID}} selected{{end}}>{{$p.Cat.SystemName .System}} by {{$p.Cat.VendorName .Vendor}}</option>{{end}}</select></label>
+      <label class="stack">Kind <select name="kind">{{range findingKinds}}<option value="{{.Key}}"{{if eq .Key $x.Kind}} selected{{end}}>{{.Label}}</option>{{end}}</select></label>
+      <label class="stack">Severity <select name="severity">{{range findingSeverities}}<option value="{{.Key}}"{{if eq .Key $x.Severity}} selected{{end}}>{{.Label}}</option>{{end}}</select><span class="field-hint">{{range $i, $c := findingSeverities}}{{if $i}}; {{end}}{{$c.Label}}: {{$c.Hint}}{{end}}</span></label>
+      <label class="stack span-2">Reading <input name="reading" value="{{$x.Reading}}" maxlength="200" placeholder="e.g. 6.2 mΩ, limit 5.5"><span class="field-hint">The measured value and its limit. Numbers show a trend before something fails; a tick doesn't.</span></label>
+    </div>
+    <label class="stack">Details <textarea name="detail" rows="3" maxlength="2000" placeholder="Where exactly, what the vendor said, report number">{{$x.Detail}}</textarea></label>
+  </fieldset>
+  <fieldset>
+    <legend>Follow-up</legend>
+    <div class="grid-4">
+      <label class="stack">Who fixes it <input name="owner" value="{{$x.Owner}}" list="finding-owner" maxlength="100" placeholder="Vendor or person"></label>
+      <label class="stack">Target date <input type="date" name="due" value="{{$x.Due}}"><span class="field-hint">When it should be closed by</span></label>
+      <label class="stack">Status <select name="status">{{range findingStatuses}}<option value="{{.Key}}"{{if eq .Key $x.Status}} selected{{end}}>{{.Label}}</option>{{end}}</select></label>
+      <label class="stack">Closed on <input type="date" name="closed_on" value="{{$x.ClosedOn}}" max="{{iso $f.Today}}"><span class="field-hint">When closing it; empty means today</span></label>
+      <label class="stack span-2">Repeat of <select name="repeat_of"><option value="">Not a repeat</option>{{range $f.Repeats}}<option value="{{.ID}}"{{if eq .ID $x.RepeatOf}} selected{{end}}>#{{.ID}}, {{date .Found}}: {{.Title}} ({{.StatusLabel}})</option>{{end}}</select><span class="field-hint">An earlier finding at this site that has come back</span></label>
+      <label class="stack span-2">Other sites <select name="spread">{{range findingSpreads}}<option value="{{.Key}}"{{if eq .Key $x.Spread}} selected{{end}}>{{.Label}}</option>{{end}}</select><span class="field-hint">Could the same thing be at other sites? Yokoten: check them and carry the fix across.</span></label>
+    </div>
+  </fieldset>
+  <fieldset>
+    <legend>Cause and action</legend>
+    <label class="stack">Root cause <textarea name="cause" rows="2" maxlength="2000" placeholder="Ask why until you reach something you can fix">{{$x.Cause}}</textarea></label>
+    <label class="stack">What was done <textarea name="action" rows="3" maxlength="2000" placeholder="The fix, and what changed so it doesn't come back: checklist, contract, layout">{{$x.Action}}</textarea><span class="field-hint">Needed to close the finding</span></label>
+  </fieldset>
+  <button>{{if $f.New}}Log finding{{else}}Save{{end}}</button>
+</form>
+<datalist id="finding-owner">{{range $f.Owners}}<option value="{{.}}">{{end}}</datalist>
 {{end}}

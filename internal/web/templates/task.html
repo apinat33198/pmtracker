@@ -25,6 +25,11 @@
   <figcaption>Twelve months back and twelve ahead. Hover a mark for its date.{{with $f.Projections}} Projected: {{range $i, $p := .}}{{if $i}}, {{end}}{{dateShort $p}}{{end}}.{{end}}</figcaption>
 </figure>
 
+<h2 id="findings">Findings</h2>
+<p class="hint">What this system's PM visits turned up.{{if .IsEditor}} Use <b>Log finding</b> on a visit below, or <a href="/findings/new?task={{$f.Task.ID}}">log one for another day</a>.{{end}}</p>
+{{template "findings" (dict "List" $d.Findings "Page" . "Empty" "No findings from this PM task yet." "Current" 0)}}
+{{if $d.More}}<p class="hint small"><a href="/findings?site={{$f.Site.ID}}&amp;status=all">{{$d.More}} more at this site</a></p>{{end}}
+
 <h2>Visits</h2>
 {{template "visits" (dict "Visits" $f.Visits "Page" . "ShowTasks" false)}}
 

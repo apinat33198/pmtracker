@@ -1,0 +1,67 @@
+{{define "content"}}{{$d := .Data}}{{$v := $d.V}}{{$cat := .Cat}}
+{{if $d.PickSite}}
+<p class="crumb"><a href="/findings">Findings</a></p>
+<section class="page-head">
+  <h1>Log a finding</h1>
+  <p class="lede">Something a PM visit or a walk round the room turned up: a fault, a reading out of limits, a housekeeping or safety problem, or an idea. Pick the site first.</p>
+</section>
+<form class="row-form" method="get" action="/findings/new">
+  <label class="grow">Site <select name="site" required><option value="">Pick a site</option>{{range $d.PickSite}}<option value="{{.ID}}">{{.Code}} {{.Name}}</option>{{end}}</select></label>
+  <button>Next</button>
+</form>
+
+{{else if $d.Form.New}}{{$site := $d.Form.Site}}
+<p class="crumb"><a href="/findings">Findings</a><a href="/sites/{{$site.ID}}">{{$site.Code}} {{$site.Name}}</a></p>
+<section class="page-head">
+  <h1>Log a finding at {{$site.Code}} {{$site.Name}}</h1>
+  <p class="lede">{{with $d.Form.From}}{{.}} {{end}}Fill in what you know now; the follow-up and the cause can be added later.</p>
+</section>
+{{template "findingForm" (dict "Form" $d.Form "Page" .)}}
+
+{{else}}
+<p class="crumb"><a href="/findings">Findings</a><a href="/sites/{{$v.Site.ID}}#findings">{{$v.Site.Code}} {{$v.Site.Name}}</a>{{if $v.HasTask}}<a href="/tasks/{{$v.Task.ID}}">{{$cat.SystemName $v.Task.System}} by {{$cat.VendorName $v.Task.Vendor}}</a>{{end}}</p>
+<section class="asset-head">
+  <div>
+    <h1>{{$v.Title}}</h1>
+    <p class="lede">#{{$v.ID}} at {{$v.Site.Code}} {{$v.Site.Name}}. {{$v.KindLabel}}{{if $v.HasTask}}, from the {{$cat.SystemName $v.Task.System}} PM by {{$cat.VendorName $v.Task.Vendor}}{{end}}. Found {{date $v.Found}}{{with $v.By}}, logged by {{.}}{{end}}.</p>
+  </div>
+  <div class="verdict s-{{$v.Tone}}">
+    <span class="pill s-{{$v.Tone}}">{{$v.StatusLabel}}</span> <span class="sev s-{{$v.SeverityTone}}">{{$v.SeverityLabel}}</span>
+    <p>{{$v.Hint}}</p>
+  </div>
+</section>
+
+<dl class="facts">
+  <div><dt>Found</dt><dd>{{date $v.Found}}<span class="sub">{{fromToday $v.Found}}</span></dd></div>
+  <div><dt>Who fixes it</dt><dd>{{with $v.Owner}}{{.}}{{else}}<span class="sub">Nobody yet</span>{{end}}</dd></div>
+  <div><dt>Target date</dt><dd>{{if $v.HasDue}}{{date $v.DueDay}}{{if $v.IsOpen}}<span class="sub{{if $v.Late}} late{{end}}">{{dueRel $v.DaysLeft}}</span>{{else if $v.ClosedOnTime}}<span class="sub">met</span>{{else}}<span class="sub late">missed</span>{{end}}{{else}}<span class="sub">None set</span>{{end}}</dd></div>
+  <div><dt>{{if $v.IsOpen}}Open for{{else}}Closed{{end}}</dt><dd>{{if $v.IsOpen}}{{$v.Age}} {{plural $v.Age "day" "days"}}{{else}}{{date $v.Closed}}<span class="sub">after {{$v.Age}} {{plural $v.Age "day" "days"}}{{with $v.ClosedBy}}, by {{.}}{{end}}</span>{{end}}</dd></div>
+  <div><dt>Other sites</dt><dd>{{$v.SpreadLabel}}</dd></div>
+</dl>
+
+<dl class="finding-text">
+  {{with $v.Reading}}<div><dt>Reading</dt><dd>{{.}}</dd></div>{{end}}
+  {{with $v.Detail}}<div><dt>Details</dt><dd>{{.}}</dd></div>{{end}}
+  <div><dt>Root cause</dt><dd>{{with $v.Cause}}{{.}}{{else}}<span class="sub">Not found yet. Ask why until you reach something you can fix.</span>{{end}}</dd></div>
+  <div><dt>What was done</dt><dd>{{with $v.Action}}{{.}}{{else}}<span class="sub">Nothing recorded yet.</span>{{end}}</dd></div>
+</dl>
+
+{{if gt (len $d.Chain) 1}}
+<h2>Came back</h2>
+<p class="hint">The same thing at this site, earlier and later. If it keeps coming back, the fix didn't reach the cause.</p>
+{{template "findings" (dict "List" $d.Chain "Page" . "Empty" "" "Current" $v.ID)}}
+{{end}}
+
+{{if .IsEditor}}
+<h2>Update</h2>
+{{template "findingForm" (dict "Form" $d.Form "Page" .)}}
+<p class="hint small"><a href="/findings/new?repeat={{$v.ID}}">Log this coming back</a> as a new finding linked to this one.</p>
+{{end}}
+{{if .IsAdmin}}
+<form class="danger" method="post" action="/findings/{{$v.ID}}/delete">
+  <p>Delete this finding only if it was logged by mistake. A finding that was dealt with should be closed instead: it's the record that the problem was handled. The deletion is kept in the activity log.</p>
+  <button class="danger-button">Delete finding #{{$v.ID}}</button>
+</form>
+{{end}}
+{{end}}
+{{end}}

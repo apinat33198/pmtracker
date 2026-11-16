@@ -83,6 +83,7 @@ type Inputs struct {
 	Manual    []ManualVisit
 	Changes   []Change
 	Jobs      []Job
+	Findings  []Finding
 }
 
 // MatchClass says how sure the matcher is that an event is a PM visit.
