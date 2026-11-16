@@ -12,7 +12,7 @@
   <thead><tr><th scope="col">When</th><th scope="col">Who</th><th scope="col">From</th><th scope="col">What</th></tr></thead>
   <tbody>
   {{range $d.Entries}}
-    <tr><td data-label="When">{{dateTime .At}}<span class="sub">{{ago .At}}</span></td><td data-label="Who">{{.By}}</td><td data-label="From">{{with .From}}<code>{{.}}</code>{{else}}<span class="sub inline">–</span>{{end}}</td><td data-label="What">{{.Action}}</td></tr>
+    <tr><td data-label="When">{{dateTime .At}}<span class="sub">{{ago .At}}</span></td><td data-label="Who">{{.By}}</td><td data-label="From">{{with .From}}<code>{{.}}</code>{{else}}<span class="sub inline">Not recorded</span>{{end}}</td><td data-label="What">{{.Action}}</td></tr>
   {{else}}
     <tr><td colspan="4" class="empty">Nothing yet.</td></tr>
   {{end}}

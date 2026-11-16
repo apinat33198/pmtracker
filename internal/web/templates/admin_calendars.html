@@ -28,7 +28,7 @@
 <h2>Add a calendar</h2>
 <form class="edit-row cal panel" method="post" action="/admin/calendars">
   <label class="stack">Calendar ID <input name="id" required placeholder="c_…@group.calendar.google.com"><span class="field-hint">Google Calendar, Settings and sharing, Integrate calendar</span></label>
-  <label class="stack">Label <input name="label" placeholder="PM – Vendors"></label>
+  <label class="stack">Label <input name="label" placeholder="PM vendors"></label>
   <label class="stack">Belongs to site <select name="site"><option value="">Any site (from the title)</option>{{range $cat.Sites}}<option value="{{.ID}}">{{.Code}} {{.Name}}</option>{{end}}</select></label>
   <label class="check-line"><input type="checkbox" name="pm_only">Every event is a PM visit</label>
   <div class="row-actions"><button>Add calendar</button></div>

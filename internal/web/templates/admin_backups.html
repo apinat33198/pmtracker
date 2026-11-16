@@ -15,7 +15,7 @@
   <tbody>
   {{range $i, $f := $d.Files}}
     <tr>
-      <td data-label="Backup"><span class="strong">{{backupWhen $f}}</span><span class="sub">{{backupKind $f.Kind}}{{if eq $i 0}} · newest{{end}}</span></td>
+      <td data-label="Backup"><span class="strong">{{backupWhen $f}}</span><span class="sub">{{backupKind $f.Kind}}{{if eq $i 0}}, newest{{end}}</span></td>
       <td data-label="Size">{{size $f.Size}}</td>
       <td class="actions">
         <a class="button ghost" href="/admin/backups/file/{{$f.Name}}" download>Download</a>

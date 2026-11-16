@@ -1,0 +1,31 @@
+[
+ {
+  "mode": "redesign",
+  "depth": "restyle",
+  "scope": "app",
+  "shape": "app screen",
+  "theme": "vantage",
+  "axes": "dark/grotesk-sans/chromatic-lime",
+  "hero": "none (app screen)",
+  "nav": "kept top bar",
+  "footer": "none",
+  "imagery": "none",
+  "photos": [],
+  "entry": "overview",
+  "fingerprint": "app/top-bar/grid-first/figures-in-ticks/hairline-tables/wells",
+  "sections": [
+   "status figures",
+   "filters",
+   "site by system grid",
+   "upcoming",
+   "by vendor",
+   "ad-hoc jobs"
+  ],
+  "signature": "site by system grid read as a scan log",
+  "waived": [
+   "49b"
+  ],
+  "prompt": "maintenance tracker for a facilities team: which sites have equipment overdue or due for preventive maintenance, link calendar visits, confirm visits",
+  "date": "2026-11-16"
+ }
+]

@@ -1,0 +1,93 @@
+/* Vantage tokens for PM Tracker. Light is derived from Vantage's dark by the
+   dark-mode recipe run backwards; the anchor hue (235) and the lime (126)
+   never move between modes. Status colours carry meaning and keep their hues. */
+
+@font-face {
+  font-family: "Geologica"; font-style: normal; font-weight: 200 500; font-display: swap;
+  src: url("fonts/geologica-v5-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Geologica"; font-style: normal; font-weight: 200 500; font-display: swap;
+  src: url("fonts/geologica-v5-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+:root {
+  color-scheme: light dark;
+  --space-3xs: 2px; --space-2xs: 4px; --space-xs: 8px; --space-sm: 12px; --space-md: 16px; --space-lg: 24px; --space-xl: 40px; --space-2xl: 64px; --space-3xl: 96px; --space-4xl: 144px;
+  --text-xs: 0.75rem; --text-sm: 0.875rem; --text-md: 1rem; --text-lg: 1.2rem; --text-xl: 1.44rem; --text-2xl: 1.728rem; --text-3xl: 2.074rem;
+  --text-display-s: 1.44rem; --text-display: 1.728rem; --text-section: 1.2rem; --text-title: 1rem; --text-lead: 1rem; --text-figure: 2.488rem;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1); --ease-in: cubic-bezier(0.7, 0, 0.84, 0); --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-micro: 120ms; --dur-short: 220ms; --dur-long: 420ms;
+  --container: 1440px; --gutter: 64px; --gap-columns: 32px; --section-gap-s: 120px; --section-gap: 144px; --section-gap-l: 176px;
+  --z-base: 1; --z-raised: 10; --z-dropdown: 100; --z-sticky: 200; --z-sticky-nav: 300; --z-modal: 400; --z-toast: 500; --z-tooltip: 600;
+
+  /* Light: steel on cool paper */
+  --color-paper: oklch(97.5% 0.005 235); --color-paper-2: oklch(95% 0.007 235); --color-paper-3: oklch(92% 0.009 235);
+  --color-raised: oklch(99% 0.003 235); --color-field: oklch(99% 0.003 235);
+  --color-ink: oklch(21% 0.02 240); --color-ink-2: oklch(38% 0.02 238); --color-muted: oklch(50% 0.018 235);
+  --color-rule: oklch(89% 0.008 235); --color-rule-2: oklch(82% 0.01 235);
+  --color-accent: oklch(88% 0.19 126); --color-accent-hi: oklch(92% 0.17 126); --color-accent-ink: oklch(22% 0.05 126);
+  --color-signal: oklch(55% 0.16 130); --color-focus: oklch(52% 0.16 130);
+  --color-error: oklch(50% 0.17 27); --color-success: oklch(48% 0.08 165);
+  --color-overdue: oklch(50% 0.17 27);     --color-overdue-bg: oklch(95% 0.025 27);
+  --color-due_soon: oklch(52% 0.12 70);    --color-due_soon-bg: oklch(95.5% 0.04 85);
+  --color-off_cycle: oklch(50% 0.15 295);  --color-off_cycle-bg: oklch(95% 0.025 295);
+  --color-no_history: oklch(50% 0.018 235); --color-no_history-bg: oklch(93% 0.008 235);
+  --color-booked: oklch(48% 0.09 230);     --color-booked-bg: oklch(95% 0.02 230);
+  --color-on_track: oklch(48% 0.08 165);   --color-on_track-bg: oklch(95% 0.02 165);
+  --point-lo: oklch(70% 0.03 245); --point-mid: oklch(50% 0.04 232); --point-hi: oklch(30% 0.03 215);
+  --color-slot: oklch(92% 0.009 235);
+
+  --font-display: "Geologica", "Noto Sans Thai", Sarabun, ui-sans-serif, system-ui, sans-serif;
+  --font-body: "Geologica", "Noto Sans Thai", Sarabun, ui-sans-serif, system-ui, sans-serif;
+  --font-code: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --weight-body: 350; --weight-ui: 400; --weight-strong: 500; --display-weight: 350;
+  --radius-card: 4px; --radius-pill: 999px; --rule-hair: 1px; --tick: 10px;
+  --shadow-card: none;
+  --tracking-display: -0.03em;
+  --control-h: 36px;
+  --page: 1280px; --page-gutter: var(--space-lg);
+}
+
+/* Dark: Vantage as dealt */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-mode]) {
+    --color-paper: oklch(13.5% 0.012 235); --color-paper-2: oklch(17% 0.014 235); --color-paper-3: oklch(21% 0.016 235);
+    --color-raised: oklch(21% 0.016 235); --color-field: oklch(13.5% 0.012 235);
+    --color-ink: oklch(95% 0.006 230); --color-ink-2: oklch(82% 0.012 230); --color-muted: oklch(66% 0.016 230);
+    --color-rule: oklch(27% 0.014 235); --color-rule-2: oklch(34% 0.016 235);
+    --color-accent: oklch(89% 0.19 126); --color-accent-hi: oklch(93% 0.17 126); --color-accent-ink: oklch(19% 0.04 126);
+    --color-signal: oklch(89% 0.19 126); --color-focus: oklch(89% 0.19 126);
+    --color-error: oklch(72% 0.15 27); --color-success: oklch(78% 0.08 165);
+    --color-overdue: oklch(72% 0.15 27);     --color-overdue-bg: oklch(24% 0.05 27);
+    --color-due_soon: oklch(80% 0.13 75);    --color-due_soon-bg: oklch(24% 0.045 75);
+    --color-off_cycle: oklch(75% 0.12 295);  --color-off_cycle-bg: oklch(24% 0.05 295);
+    --color-no_history: oklch(66% 0.016 230); --color-no_history-bg: oklch(21% 0.016 235);
+    --color-booked: oklch(78% 0.08 225);     --color-booked-bg: oklch(22% 0.035 228);
+    --color-on_track: oklch(78% 0.08 165);   --color-on_track-bg: oklch(22% 0.03 165);
+    --point-lo: oklch(42% 0.04 245); --point-mid: oklch(70% 0.04 232); --point-hi: oklch(96% 0.02 215);
+    --color-slot: oklch(21% 0.016 235);
+    --weight-body: 300; --display-weight: 300;
+  }
+}
+[data-mode="dark"] {
+  --color-paper: oklch(13.5% 0.012 235); --color-paper-2: oklch(17% 0.014 235); --color-paper-3: oklch(21% 0.016 235);
+  --color-raised: oklch(21% 0.016 235); --color-field: oklch(13.5% 0.012 235);
+  --color-ink: oklch(95% 0.006 230); --color-ink-2: oklch(82% 0.012 230); --color-muted: oklch(66% 0.016 230);
+  --color-rule: oklch(27% 0.014 235); --color-rule-2: oklch(34% 0.016 235);
+  --color-accent: oklch(89% 0.19 126); --color-accent-hi: oklch(93% 0.17 126); --color-accent-ink: oklch(19% 0.04 126);
+  --color-signal: oklch(89% 0.19 126); --color-focus: oklch(89% 0.19 126);
+  --color-error: oklch(72% 0.15 27); --color-success: oklch(78% 0.08 165);
+  --color-overdue: oklch(72% 0.15 27);     --color-overdue-bg: oklch(24% 0.05 27);
+  --color-due_soon: oklch(80% 0.13 75);    --color-due_soon-bg: oklch(24% 0.045 75);
+  --color-off_cycle: oklch(75% 0.12 295);  --color-off_cycle-bg: oklch(24% 0.05 295);
+  --color-no_history: oklch(66% 0.016 230); --color-no_history-bg: oklch(21% 0.016 235);
+  --color-booked: oklch(78% 0.08 225);     --color-booked-bg: oklch(22% 0.035 228);
+  --color-on_track: oklch(78% 0.08 165);   --color-on_track-bg: oklch(22% 0.03 165);
+  --point-lo: oklch(42% 0.04 245); --point-mid: oklch(70% 0.04 232); --point-hi: oklch(96% 0.02 215);
+  --color-slot: oklch(21% 0.016 235);
+  --weight-body: 300; --display-weight: 300;
+  color-scheme: dark;
+}

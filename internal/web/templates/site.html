@@ -2,8 +2,7 @@
 <p class="crumb"><a href="/">Overview</a>{{if .IsAdmin}}<a href="/admin/sites/{{$ss.Site.ID}}">Edit site and tasks</a>{{end}}</p>
 <section class="asset-head">
   <div>
-    <p class="code">{{$ss.Site.Code}}</p>
-    <h1>{{$ss.Site.Name}}</h1>
+    <h1>{{$ss.Site.Code}} {{$ss.Site.Name}}</h1>
     <p class="lede">{{with $ss.Site.Region}}{{.}}. {{end}}{{len $ss.Forecasts}} PM {{plural (len $ss.Forecasts) "task" "tasks"}}.{{if not $ss.LastPM.IsZero}} Last PM {{date $ss.LastPM}}, {{taskLabel $cat $ss.LastPMTask}}.{{end}}</p>
   </div>
   <div class="verdict s-{{$ss.Worst}}">

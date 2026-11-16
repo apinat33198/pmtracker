@@ -3,8 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{{.Title}} – PM Tracker</title>
+<title>{{.Title}} | PM Tracker</title>
+<link rel="preload" href="/static/fonts/geologica-v5-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="{{asset "tokens.css"}}">
+<link rel="stylesheet" href="{{asset "base.css"}}">
 <link rel="stylesheet" href="{{asset "style.css"}}">
+<meta name="description" content="Preventive maintenance across your sites: what is overdue, due soon or booked, from the vendors' calendar invites.">
 <link rel="icon" href="{{asset "icon.svg"}}" type="image/svg+xml">
 <script src="{{asset "pick.js"}}" defer></script>
 </head>
@@ -40,7 +44,7 @@
   {{end}}
  </div>
 </header>
-{{if .Demo}}<p class="demo-bar"><span class="demo-tag">Demo</span> 21 sites with events generated around today. {{if .User.SignedIn}}Changes you make are saved to the demo data file.{{else}}Anyone can look; sign in as admin, editor or viewer (password <b>demo</b>) to make changes.{{end}}</p>{{end}}
+{{if .Demo}}<p class="demo-bar"><b>Demo data:</b> 21 sites with events generated around today. {{if .User.SignedIn}}Changes you make are saved to the demo data file.{{else}}Anyone can look; sign in as admin, editor or viewer (password <b>demo</b>) to make changes.{{end}}</p>{{end}}
 <div class="flashes">
 {{range .SyncErrors}}<p class="flash error" role="alert">Calendar sync is failing. {{.}}</p>{{end}}
 {{with .Msg}}<p class="flash {{$.MsgKind}}" role="status">{{.}}</p>{{end}}

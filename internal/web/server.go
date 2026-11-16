@@ -69,7 +69,8 @@ func (s *Server) Handler() (http.Handler, error) {
 	mux.Handle("GET /static/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Pages link to /static/file?v=<content hash>, so a new release gets a
 		// new address and browsers and Cloudflare never serve a stale copy.
-		if r.URL.Query().Get("v") != "" {
+		// Font files carry their version in the file name instead.
+		if r.URL.Query().Get("v") != "" || strings.HasPrefix(r.URL.Path, "/static/fonts/") {
 			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 		} else {
 			w.Header().Set("Cache-Control", "no-cache")

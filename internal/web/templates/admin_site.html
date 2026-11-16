@@ -32,7 +32,7 @@
       <td data-label="System"><span class="strong">{{$cat.SystemName .Task.System}}</span>{{with .Task.Notes}}<span class="sub">{{.}}</span>{{end}}</td>
       <td data-label="Vendor">{{$cat.VendorName .Task.Vendor}}</td>
       <td data-label="Cycle">{{if .Live}}{{template "cycle" .Forecast.Policy}}{{else}}Every {{if .Task.IntervalMonths}}{{.Task.IntervalMonths}}{{else}}{{$.Cfg.Defaults.IntervalMonths}}{{end}} months{{end}}</td>
-      <td data-label="Last PM">{{if .Live}}{{with .Forecast.LastDone}}{{date .Date}}{{else}}<span class="sub">None</span>{{end}}{{else}}<span class="sub">–</span>{{end}}</td>
+      <td data-label="Last PM">{{if .Live}}{{with .Forecast.LastDone}}{{date .Date}}{{else}}<span class="sub">None</span>{{end}}{{else}}<span class="sub">Not tracked</span>{{end}}</td>
       <td data-label="Status">{{if .Task.Paused}}<span class="tag">Paused</span>{{else if .Live}}<span class="pill s-{{.Forecast.Status}}">{{.Forecast.Status.Short}}</span>{{else}}<span class="sub">Site archived</span>{{end}}</td>
       <td class="actions"><a class="button ghost" href="/admin/tasks/{{.Task.ID}}">Edit</a></td>
     </tr>
