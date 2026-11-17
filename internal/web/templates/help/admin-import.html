@@ -1,0 +1,41 @@
+{{define "helpbody"}}
+<p>วิธีที่เร็วที่สุดในการตั้งทุก site คือกรอก spreadsheet แล้ว import ที่ <a href="/admin/import">Admin › Import and export</a> หนึ่งแถวคือหนึ่ง PM task (system หนึ่งที่ site หนึ่ง กับ vendor ของมัน)</p>
+
+<h2 id="columns">คอลัมน์</h2>
+<div class="tbl"><table>
+  <thead><tr><th>คอลัมน์</th><th>จำเป็น</th><th>ความหมาย</th></tr></thead>
+  <tbody>
+    <tr><td><code>site_code</code></td><td>ใช่</td><td class="wrap">รหัส site เช่น BKK1</td></tr>
+    <tr><td><code>system</code></td><td>ใช่</td><td class="wrap">ชื่อ system หรือชื่ออื่นของมัน (UPS, CRAC, DC power …)</td></tr>
+    <tr><td><code>vendor</code></td><td>ใช่</td><td class="wrap">ชื่อ vendor หรือชื่ออื่นของมัน</td></tr>
+    <tr><td><code>site_name</code>, <code>region</code></td><td>ไม่</td><td class="wrap">ใช้ตอนสร้าง site ใหม่</td></tr>
+    <tr><td><code>interval_months</code></td><td>ไม่</td><td class="wrap">รอบ PM เป็นเดือน (ค่าเริ่มต้น {{.Cfg.Defaults.IntervalMonths}})</td></tr>
+    <tr><td><code>last_pm_date</code></td><td>ไม่</td><td class="wrap">วัน PM ล่าสุด บันทึกเมื่อใหม่กว่าที่มีอยู่</td></tr>
+    <tr><td><code>anchor_mode</code></td><td>ไม่</td><td class="wrap"><code>rolling</code> (นับจาก PM ล่าสุด) หรือ <code>fixed</code> (วันตามสัญญา)</td></tr>
+    <tr><td><code>anchor_date</code></td><td>ไม่</td><td class="wrap">First slot date (จำเป็นสำหรับ fixed)</td></tr>
+    <tr><td><code>notes</code></td><td>ไม่</td><td class="wrap">หมายเหตุของ task</td></tr>
+  </tbody>
+</table></div>
+<p>วันที่ใช้ได้สามแบบ: <code>2026-09-14</code>, <code>14/09/2026</code> หรือปีพุทธศักราช <code>14/09/2569</code> กด <b class="ui">Download a template</b> เพื่อได้ไฟล์ตัวอย่าง</p>
+<pre><code>site_code,site_name,region,system,vendor,interval_months,last_pm_date
+BKK1,Bang Na,Bangkok,DC power,VoltEdge Power,3,2026-09-14
+BKK1,Bang Na,Bangkok,UPS,ABC Power,3,2026-08-30
+BKK1,Bang Na,Bangkok,CRAC,CoolAir Services,3,15/09/2569</code></pre>
+
+<h2 id="import">นำเข้า</h2>
+<ol class="steps">
+  <li>เลือกไฟล์ CSV ที่ <b class="ui">CSV file</b> หรือวางแถวลงใน <b class="ui">Or paste rows</b> (บันทึกจาก Excel เป็น CSV UTF-8)</li>
+  <li>กด <b class="ui">Check without saving</b> ระบบแสดงสิ่งที่จะเกิด: site, system, vendor และ task ใหม่กี่รายการ task ที่ถูกอัปเดต วัน PM ล่าสุดที่จะบันทึก และปัญหาแยกตามบรรทัด</li>
+  <li>แก้ไฟล์จนไม่มีปัญหา แล้วกด <b class="ui">Import</b></li>
+</ol>
+<ul>
+  <li>site, system และ vendor ที่ยังไม่มีจะถูกสร้างให้</li>
+  <li>task ที่มีอยู่แล้วจะถูกอัปเดตรอบ PM</li>
+  <li>วัน PM ล่าสุดจะบันทึกเมื่อใหม่กว่าที่มีในระบบเท่านั้น</li>
+  <li><b>ทั้งหมดหรือไม่มีเลย</b>: ถ้ามีบรรทัดไหนมีปัญหา จะไม่บันทึกอะไรเลย</li>
+  <li>หลัง import ให้เติม email domain ของ vendor ใหม่ที่ <a href="/admin/vendors">Vendors</a></li>
+</ul>
+
+<h2 id="export">Export แล้วนำกลับ</h2>
+<p><b class="ui">Export status CSV</b> ดาวน์โหลดสถานะของทุก task คอลัมน์แรก ๆ ตรงกับรูปแบบ import จึงแก้ใน spreadsheet (เช่น เปลี่ยนรอบ PM หลายรายการ) แล้ว import กลับได้</p>
+{{end}}

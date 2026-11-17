@@ -21,6 +21,9 @@ overview.
   everything is in the activity log, the backups and the Jobs CSV.
 - **Findings (Kaizen):** what PM visits and walks round the rooms turn up,
   followed until it's fixed. See [Findings](#findings) below.
+- **Manual at /help (Thai):** how every page and button works, for people
+  using the tracker, admins and developers, with search. Linked from the
+  account menu and from each main page. See [Manual](#manual) below.
 - **Incidents (ISO 31000):** failures, alarms and near misses, rated on a
   5 × 5 risk matrix, treated, re-rated and kept with a timeline nobody can
   edit. See [Incidents](#incidents) below.
@@ -512,7 +515,7 @@ internal/store     JSON-file store: catalog, mirrored events, decisions, rules,
                    session key; the activity log in its own daily files
 internal/backup    daily backups, pruning, restore input
 internal/web       pages, sign-in, setup, accounts, admin handlers, role checks,
-                   templates, timeline SVG, CSS
+                   templates, timeline SVG, CSS, the manual (/help)
 internal/demo      21-site demo catalog and fake calendar
 internal/notify    Telegram sender, daily scheduler
 ```
@@ -527,6 +530,24 @@ posts, open redirects, lockout, first-run setup, user management and the
 last-admin guard; findings and incidents: validation, links and repeats,
 risk ratings and the matrix, timelines that can't be rewritten, who may
 close a high residual risk, restore checks, and the demo data.
+
+## Manual
+
+The manual is part of the tracker, at `/help`, in Thai with the app's
+English button names. It has 23 pages in four groups (getting started, daily
+use, admin, developer), a search box, an "on this page" list and previous
+and next links. Everyone who can sign in can read every page.
+
+- Pages are `internal/web/templates/help/<slug>.html`, each defining
+  `helpbody`; their order, group, title and summary are `helpPages` in
+  `internal/web/help.go`.
+- Pages use the app's template functions and `.Cfg`, so rating scales,
+  status rules and default days shown in the manual come from the code and
+  the server's config.
+- Screenshots are `internal/web/static/help/*.webp`, taken from the demo.
+- `go test` checks every page renders, every link (and #section) in the
+  manual and the app's links into it resolve, and every function named on
+  the developer pages exists in the code.
 
 ## Storage in production
 

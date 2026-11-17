@@ -1,0 +1,37 @@
+{{define "helpbody"}}
+<p>visit คือการมาทำ PM หนึ่งครั้ง ส่วนใหญ่มาจากนัดในปฏิทิน บางครั้งบันทึกเอง ตาราง visit อยู่ที่หน้า site (<b>Recent visits</b>) และหน้า task (<b>Visits</b>) ปุ่มในตารางนี้ใช้ได้เฉพาะ <span class="role">editor</span> และ <span class="role">admin</span></p>
+
+<h2 id="columns">อ่านตาราง visit</h2>
+<ul>
+  <li><b class="ui">Date</b>: วันนัด และเวลาถ้าไม่ใช่นัดทั้งวัน</li>
+  <li><b class="ui">Status</b>: <span class="vs vs-scheduled">Scheduled</span>, <span class="vs vs-done_unconfirmed">Done, unconfirmed</span>, <span class="vs vs-done">Done</span>, <span class="vs vs-missed">Missed</span> หรือ <span class="vs vs-cancelled">Cancelled</span> (<a href="/help/statuses#visit-statuses">ความหมาย</a>)</li>
+  <li><b class="ui">From</b>: ชื่อนัดในปฏิทินและชื่อปฏิทิน หรือ <i>Recorded by hand</i> พร้อมหมายเหตุ ถ้าจับคู่ด้วยมือหรือด้วยกฎจะบอกไว้ (<i>linked by hand</i>, <i>series rule</i>, <i>title rule</i>)</li>
+  <li><b class="ui">Covers</b> (หน้า site): task ที่ visit นี้ครอบคลุม</li>
+</ul>
+
+<h2 id="confirm">ยืนยันว่าทำแล้ว หรือ vendor ไม่มา</h2>
+<p>เมื่อวันนัดผ่านไป visit จะเป็น <span class="vs vs-done_unconfirmed">Done, unconfirmed</span> และนับว่าทำแล้วไปก่อน หลังเช็กกับ vendor หรือรายงาน PM แล้ว:</p>
+<ul>
+  <li>กด <b class="ui">Confirm done</b> ถ้ามาทำจริง สถานะเป็น <span class="vs vs-done">Done</span></li>
+  <li>กด <b class="ui">Mark missed</b> ถ้าไม่ได้มา visit จะไม่นับ วันครบกำหนดกลับไปคิดจาก PM ครั้งก่อน และ task อาจกลายเป็น <span class="pill s-overdue">Overdue</span> ทันที ซึ่งถูกต้องแล้ว</li>
+  <li>กด <b class="ui">Undo</b> บน visit ที่ยืนยันหรือ mark ไปแล้ว เพื่อกลับเป็นสถานะเดิม</li>
+</ul>
+<p>หน้า Overview แจ้งจำนวน visit ที่รอยืนยันไว้เสมอ ทุกการกดถูกบันทึกใน activity log ว่าใครทำเมื่อไร</p>
+
+<h2 id="manual">บันทึก visit เอง</h2>
+<p>ใช้เมื่อ vendor มาโดยไม่มีนัดในปฏิทิน หรือเพื่อใส่ประวัติจากเอกสารกระดาษ:</p>
+<ol class="steps">
+  <li>หน้า site: ที่ <b class="ui">Record a PM visit</b> ติ๊กทุก system ที่ทำในครั้งนั้น ใส่วันที่ (ห้ามเป็นวันในอนาคต) และหมายเหตุ เช่น เลขที่รายงานหรือชื่อช่าง แล้วกด <b class="ui">Record visit</b></li>
+  <li>หน้า task: ที่ <b class="ui">Record a past visit</b> ใส่วันที่และหมายเหตุ แล้วกด <b class="ui">Record visit</b></li>
+</ol>
+<p>visit ที่บันทึกเองเป็น <span class="vs vs-done">Done</span> ทันที ถ้าใส่ผิดให้กด <b class="ui">Delete</b> บนแถวนั้น (ลบได้เฉพาะ visit ที่บันทึกเอง)</p>
+
+<h2 id="changes">การเลื่อนนัดและการยกเลิก</h2>
+<ul>
+  <li>ถ้า vendor <b>เลื่อนนัด</b>ในปฏิทิน ระบบใช้วันใหม่ และใต้ชื่อนัดแสดงว่า <i>Moved from … to …</i> พร้อมวันที่ระบบเห็นการเปลี่ยน</li>
+  <li>ถ้า vendor <b>ยกเลิกนัด</b> visit เป็น <span class="vs vs-cancelled">Cancelled</span> และไม่นับ ถ้าไม่มีนัดใหม่ task จะไปตามสถานะปกติ เช่น Due soon หรือ Overdue</li>
+</ul>
+
+<h2 id="finding">บันทึกสิ่งที่พบจาก visit</h2>
+<p>ปุ่ม <b class="ui">Log finding</b> บน visit ที่ทำแล้ว เปิดฟอร์ม finding ที่กรอกวันที่ site และ system ให้แล้ว ใช้บันทึกสิ่งที่ vendor หรือทีมเจอระหว่าง PM เช่น ค่าที่วัดได้เกินเกณฑ์ (<a href="/help/findings">Findings</a>)</p>
+{{end}}

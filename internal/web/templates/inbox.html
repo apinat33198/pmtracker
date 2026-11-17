@@ -1,7 +1,7 @@
 {{define "content"}}{{$cat := .Cat}}
 <section class="page-head">
   <h1>Review inbox</h1>
-  <p class="lede">Events that look like a vendor PM visit but couldn't be tied to a site's PM task on their own. Link each one once; save a rule so the next ones match automatically.</p>
+  <p class="lede">Events that look like a vendor PM visit but couldn't be tied to a site's PM task on their own. Link each one once; save a rule so the next ones match automatically. <a class="help-link" href="/help/inbox">Help</a></p>
 </section>
 
 {{range .Snap.Inbox}}{{$ev := .Event}}{{$m := .Match}}

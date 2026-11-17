@@ -1,0 +1,60 @@
+{{define "helpbody"}}
+<p>ทุก PM task มีสถานะเดียว ณ วันนี้ สถานะบอกว่าต้องทำอะไรต่อ เรียงจากเร่งที่สุดไปน้อยที่สุดตามตารางด้านล่าง จุดสีหน้าชื่อ site ในหน้า Overview คือสถานะที่เร่งที่สุดของ site นั้น</p>
+
+<h2 id="task-statuses">สถานะของ PM task</h2>
+<div class="tbl"><table>
+  <thead><tr><th>สถานะ</th><th>หมายความว่า</th><th>ควรทำอะไร</th></tr></thead>
+  <tbody>
+    <tr><td><span class="pill s-overdue">Overdue</span></td><td class="wrap">เลยวันครบกำหนดมาเกิน {{.Cfg.Defaults.GraceDays}} วัน (ช่วงผ่อนผัน) และยังไม่มี visit ที่นัดไว้</td><td class="wrap">ตาม vendor ให้นัดทันที</td></tr>
+    <tr><td><span class="pill s-due_soon">Due soon, not booked</span></td><td class="wrap">จะครบกำหนดภายใน {{.Cfg.Defaults.LeadDays}} วัน และยังไม่มีนัด</td><td class="wrap">ขอให้ vendor ลงนัด</td></tr>
+    <tr><td><span class="pill s-off_cycle">Off-cycle</span></td><td class="wrap">มีนัดแล้ว แต่ห่างจากวันครบกำหนดเกิน ±{{.Cfg.Defaults.WindowDays}} วัน</td><td class="wrap">ตรวจกับ vendor ว่าวันนัดถูกต้องไหม ถ้าเร็วไปหรือช้าไปมากรอบ PM จะเพี้ยน</td></tr>
+    <tr><td><span class="pill s-no_history">No history</span></td><td class="wrap">ยังไม่มี PM ที่ทำแล้วในระบบ และยังไม่ได้ตั้งวันครบกำหนดแรก จึงคำนวณไม่ได้</td><td class="wrap">admin ตั้งวัน PM ล่าสุด หรือ editor บันทึก visit ย้อนหลัง หรือเชื่อม event เก่าใน Review inbox</td></tr>
+    <tr><td><span class="pill s-booked">Booked</span></td><td class="wrap">มีนัดอยู่ในช่วง ±{{.Cfg.Defaults.WindowDays}} วันรอบวันครบกำหนด</td><td class="wrap">ไม่ต้องทำอะไร รอวันนัด</td></tr>
+    <tr><td><span class="pill s-on_track">On track</span></td><td class="wrap">ยังไม่ถึงช่วงที่ต้องนัด</td><td class="wrap">ไม่ต้องทำอะไร</td></tr>
+  </tbody>
+</table></div>
+<p>ตัวเลข {{.Cfg.Defaults.GraceDays}}, {{.Cfg.Defaults.LeadDays}} และ {{.Cfg.Defaults.WindowDays}} วันข้างบนคือค่าที่ตั้งไว้ในเซิร์ฟเวอร์นี้ แต่ละ task ตั้งค่าของตัวเองแทนได้ (admin ทำที่หน้าแก้ task: <b class="ui">Booking window</b>, <b class="ui">Remind … days before due</b>, <b class="ui">Overdue after … days</b>)</p>
+
+<h2 id="next-due">วันครบกำหนดคิดอย่างไร</h2>
+<p>ระบบดู visit ของ task นั้นทั้งหมด แล้วหา <b>PM ครั้งล่าสุด</b> คือ visit ที่ถึงวันแล้วและสถานะเป็น Done หรือ Done, unconfirmed จากนั้นคิดวันครบกำหนดตามรูปแบบรอบของ task:</p>
+<h3>From the last visit (ค่าเริ่มต้น)</h3>
+<p>วันครบกำหนด = วัน PM ครั้งล่าสุด + รอบ (เช่น 3 เดือน) ถ้า vendor มาช้าไปสองสัปดาห์ รอบถัดไปก็เลื่อนตามไปด้วย</p>
+<h3>Fixed contract slots</h3>
+<p>ใช้เมื่อสัญญากำหนดวัน PM ตายตัว เช่น ทุกไตรมาสนับจากวันเริ่มสัญญา วันครบกำหนดแต่ละรอบ = <b>First slot date</b> + n × รอบ คิดจากวันแรกทุกครั้ง ไม่ต่อจากรอบก่อน วันจึงไม่ค่อย ๆ เลื่อน ระบบเลือก slot แรกที่ช่วงจองเริ่มหลัง PM ครั้งล่าสุด ถ้า vendor มาช้า รอบถัดไปก็ยังเป็นวันเดิมตามสัญญา</p>
+<h3>กรณีอื่น</h3>
+<ul>
+  <li>ยังไม่มีประวัติ แต่ตั้ง <b class="ui">First slot date</b> ไว้ในโหมด From the last visit: ใช้วันนั้นเป็นวันครบกำหนดแรก</li>
+  <li>ยังไม่มีประวัติและไม่มีวันแรก แต่มีนัดแล้ว: ใช้วันนัดเป็นวันครบกำหนด</li>
+  <li>ไม่มีอะไรเลย: สถานะเป็น <span class="pill s-no_history">No history</span></li>
+</ul>
+<h3>การบวกเดือน</h3>
+<p>การบวกเดือนจะไม่ล้นไปเดือนถัดไป: 30 พ.ย. + 3 เดือน = 28 ก.พ. (ไม่ใช่ 2 มี.ค.) และ 31 ส.ค. → 30 พ.ย. → 28 ก.พ. ในโหมด fixed slots</p>
+<h3>วันหยุด</h3>
+<p>ถ้าวันครบกำหนดตรงกับเสาร์ อาทิตย์ หรือวันหยุดที่ admin ใส่ไว้ใน config (<code>holidays</code>) หน้า task จะแนะนำวันทำงานที่ใกล้ที่สุดให้เสนอ vendor แทน</p>
+
+<h2 id="booking">นัดและช่วงจอง</h2>
+<p><b>นัด (booked)</b> คือ visit แรกที่สถานะ Scheduled และวันนัดยังไม่ผ่าน <b>ช่วงจอง (booking window)</b> คือวันครบกำหนด ± {{.Cfg.Defaults.WindowDays}} วัน นัดที่อยู่ในช่วงนี้นับว่าตรงรอบ (<span class="pill s-booked">Booked</span>) นัดที่อยู่นอกช่วงเป็น <span class="pill s-off_cycle">Off-cycle</span> หน้า task แสดงช่วงจองเป็นแถบสีบน timeline และบอกว่านัดห่างจากวันครบกำหนดกี่วัน</p>
+
+<h2 id="visit-statuses">สถานะของ visit</h2>
+<div class="tbl"><table>
+  <thead><tr><th>สถานะ</th><th>หมายความว่า</th><th>นับเป็น PM ที่ทำแล้วไหม</th></tr></thead>
+  <tbody>
+    <tr><td><span class="vs vs-scheduled">Scheduled</span></td><td class="wrap">นัดในอนาคต</td><td>ยัง</td></tr>
+    <tr><td><span class="vs vs-done_unconfirmed">Done, unconfirmed</span></td><td class="wrap">วันนัดผ่านไปแล้ว ยังไม่มีใครยืนยัน</td><td>นับ</td></tr>
+    <tr><td><span class="vs vs-done">Done</span></td><td class="wrap">มีคนกด Confirm done แล้ว หรือบันทึกเอง</td><td>นับ</td></tr>
+    <tr><td><span class="vs vs-missed">Missed</span></td><td class="wrap">มีคนกด Mark missed: vendor ไม่ได้มา</td><td>ไม่นับ</td></tr>
+    <tr><td><span class="vs vs-cancelled">Cancelled</span></td><td class="wrap">ผู้จัดยกเลิกนัดในปฏิทิน</td><td>ไม่นับ</td></tr>
+  </tbody>
+</table></div>
+<p class="tip">ถ้าวันนัดผ่านไปแล้วแต่ vendor ไม่ได้มา ให้กด <b class="ui">Mark missed</b> ทันที มิฉะนั้นระบบจะนับว่าทำแล้วและเลื่อนรอบถัดไปให้ ทั้งที่จริงยังไม่ได้ทำ</p>
+
+<h2 id="example">ตัวอย่าง</h2>
+<p>UPS ที่ BKK1 รอบทุก 3 เดือน แบบ From the last visit, PM ครั้งล่าสุด 3 ก.ย. 2026:</p>
+<ul>
+  <li>วันครบกำหนด = 3 ธ.ค. 2026 ช่วงจอง = 12 พ.ย. ถึง 24 ธ.ค. (±21 วัน)</li>
+  <li>วันนี้ 17 พ.ย. ยังไม่มีนัด เหลือ 16 วัน (น้อยกว่า 30) → <span class="pill s-due_soon">Due soon, not booked</span></li>
+  <li>vendor ลงนัด 13 ม.ค. 2027 ซึ่งห่างวันครบกำหนด 41 วัน เกิน 21 วัน → <span class="pill s-off_cycle">Off-cycle</span></li>
+  <li>vendor เลื่อนเป็น 1 ธ.ค. (อยู่ในช่วงจอง) → <span class="pill s-booked">Booked</span></li>
+  <li>ถ้าไม่มีนัดเลยจนถึง 11 ธ.ค. (ครบกำหนด + 7 วัน) → <span class="pill s-overdue">Overdue</span></li>
+</ul>
+{{end}}

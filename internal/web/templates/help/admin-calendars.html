@@ -1,0 +1,47 @@
+{{define "helpbody"}}
+<p>PM Tracker อ่าน Google Calendar ด้วย <b>service account</b> (บัญชีสำหรับโปรแกรม) ซึ่งเห็นเฉพาะปฏิทินที่แชร์ให้ และอ่านได้อย่างเดียว ตั้งค่าครั้งเดียว แล้วเพิ่มหรือเอาปฏิทินออกจากหน้าเว็บได้</p>
+
+<h2 id="service-account">ต่อ Google Calendar (ครั้งแรก)</h2>
+<ol class="steps">
+  <li>ใน Google Cloud Console สร้าง project เปิดใช้ <b>Google Calendar API</b> สร้าง <b>service account</b> แล้วดาวน์โหลด key แบบ JSON</li>
+  <li>วางไฟล์ key บนเซิร์ฟเวอร์ตามที่ <code>google.credentials_file</code> ใน config ชี้ไว้ (ปกติคือ <code>/etc/pmtracker/service-account.json</code>) ถ้าติดตั้งด้วย <code>install.sh</code> ให้วาง <code>service-account.json</code> ไว้ในโฟลเดอร์ repo แล้วรัน install.sh ใหม่</li>
+  <li>รีสตาร์ต service ก่อนมี key ระบบยังทำงานได้แต่ขึ้นว่ายังไม่ได้ต่อ Google</li>
+  <li>แชร์ปฏิทิน PM แต่ละอันให้อีเมลของ service account (<code>…@….iam.gserviceaccount.com</code> แสดงในหน้า <a href="/admin/calendars">Calendars and sync</a>) ด้วยสิทธิ์ <b>See all event details</b> ถ้าเป็น Google Workspace admin อาจต้องอนุญาตการแชร์ออกนอกโดเมน</li>
+  <li>รัน <code>pmtracker -config /etc/pmtracker/config.json check</code> เพื่อตรวจ key และทุกปฏิทิน คำสั่งนี้บอกว่าแต่ละปฏิทินมี event กี่รายการ และจับคู่ได้กี่รายการ</li>
+</ol>
+
+<h2 id="add">เพิ่มปฏิทิน</h2>
+<p>ที่ <b class="ui">Add a calendar</b>:</p>
+<ul>
+  <li><b class="ui">Calendar ID</b>: หาใน Google Calendar → Settings and sharing → Integrate calendar</li>
+  <li><b class="ui">Label</b>: ชื่อที่แสดงในแอป</li>
+  <li><b class="ui">Belongs to site</b>: ใช้กับ site ที่มีปฏิทินของตัวเองและไม่ใส่รหัส site ในชื่อนัด</li>
+  <li><b class="ui">Every event is a PM visit</b>: ติ๊กสำหรับปฏิทินที่มีแต่นัด PM ระบบจะไม่ต้องหาคำว่า PM ในชื่อนัด</li>
+</ul>
+<p>แต่ละปฏิทินแสดงเวลาที่ sync ล่าสุด และข้อผิดพลาดถ้ามี กด <b class="ui">Stop tracking</b> เพื่อเลิกอ่าน event ที่อ่านมาจากปฏิทินนั้นจะถูกลบออกจากระบบ (ไม่กระทบ Google Calendar)</p>
+
+<h2 id="sync">การ sync</h2>
+<ul>
+  <li>อ่านทุก {{.Cfg.SyncIntervalMinutes}} นาที (<code>sync_interval_minutes</code>) และเมื่อมีคนกด <b class="ui">Sync now</b></li>
+  <li>ครั้งแรกอ่านย้อนหลัง {{.Cfg.SyncLookbackMonths}} เดือน (<code>sync_lookback_months</code>) จากนั้นอ่านเฉพาะที่เปลี่ยน</li>
+  <li>ถ้า Google ให้อ่านใหม่ทั้งหมด (เกิดเป็นครั้งคราว) ระบบอ่านแค่ {{.Cfg.SyncLookbackMonths}} เดือนย้อนหลัง ประวัติ PM ที่เก่ากว่านั้นจะหายจากระบบ ถ้า audit ต้องย้อน 3 ปี ให้ตั้งเป็น 36</li>
+  <li>เมื่ออ่านไม่สำเร็จ จุดสถานะเป็นสีแดง และทุกหน้ามีแถบแจ้งสาเหตุ เช่น ยังไม่ได้แชร์ปฏิทินให้ service account</li>
+</ul>
+
+<h2 id="matching">ระบบจับคู่ event อย่างไร</h2>
+<p>ลำดับที่ระบบใช้ ข้อแรกที่ตรงเป็นผล:</p>
+<ol class="steps">
+  <li><b>การตัดสินใน Review inbox</b> หรือ <b>กฎที่จำไว้</b> (recurring series เดียวกัน หรือชื่อเดียวกัน)</li>
+  <li><b>สัญญาณว่าเป็น PM</b>: อยู่ในปฏิทินที่ติ๊ก Every event is a PM visit, ชื่อขึ้นต้นด้วย <code>[PM]</code>, มีคำว่า <code>PM</code> เป็นคำเดี่ยว (ไม่ใช่ <code>3 PM</code>), <code>preventive maintenance</code>, <code>บำรุงรักษา</code>, <code>ซ่อมบำรุง</code> หรือคำใน <code>keywords</code> ของ config{{with .Cfg.Keywords}} (เซิร์ฟเวอร์นี้: {{range $i, $k := .}}{{if $i}}, {{end}}<code>{{$k}}</code>{{end}}){{end}}</li>
+  <li><b>site</b>: จากปฏิทินที่ผูกกับ site, ไม่อย่างนั้นจากรหัสหรือชื่ออื่นของ site ในชื่อนัด, แล้วในสถานที่ (location), แล้วในรายละเอียด</li>
+  <li><b>system</b> จากชื่อ system หรือชื่ออื่นในชื่อนัด และ <b>vendor</b> จาก <code>– ชื่อ vendor</code> ท้ายชื่อแบบ [PM], โดเมนอีเมลของผู้จัดหรือผู้ร่วมนัด หรือชื่อ vendor ในข้อความ</li>
+  <li>เลือก task ของ site ที่ตรงกับ vendor และ system ถ้า system นั้นที่ site นั้นมี vendor เดียว นัดไม่ต้องระบุ vendor ก็ได้ ถ้ามีสอง vendor และนัดไม่บอก นัดจะไปที่ Review inbox พร้อมสองตัวเลือก</li>
+</ol>
+<p>นัดหนึ่งครอบคลุมได้หลาย system เช่น <code>[PM] BKK1 DC, UPS – VoltEdge</code> เมื่อ VoltEdge ทำทั้งสองระบบที่ BKK1 ผลและเหตุผลของทุกนัดดูได้ที่หน้า <a href="/events">Events</a></p>
+
+<h2 id="rules">Learned rules</h2>
+<p>กฎที่สร้างจาก Review inbox เมื่อเลือก <i>Every event in this recurring series</i> หรือ <i>Every event titled …</i> แต่ละกฎบอกว่าตรงกับอะไรและผูกกับ task ไหน กด <b class="ui">Delete rule</b> เพื่อลบ เช่น เมื่อเปลี่ยน vendor แล้ว series เดิมไม่ใช่ของ task เดิม</p>
+
+<h2 id="feed">Forecast feed และ Daily digest</h2>
+<p>ส่วนท้ายของหน้าแสดงลิงก์ฟีดปฏิทินคาดการณ์ (ถ้าตั้ง <code>feed.token</code>) และตัวอย่าง digest ของวันนี้ ตั้งค่าทั้งสองใน config (<a href="/help/dev-config">config.json</a>) ผู้ใช้อ่านรายละเอียดได้ที่ <a href="/help/notifications">Digest, ปฏิทิน และ CSV</a></p>
+{{end}}

@@ -1,0 +1,114 @@
+{{define "helpbody"}}
+<p><b>Incident</b> คือสิ่งที่ผิดพลาดในห้อง หรือ<b>เกือบ</b>ผิดพลาด (near miss) เช่น ไฟดับ UPS ไป bypass CRAC trip น้ำรั่ว VESDA แจ้งเตือน ประตูไม่ได้ล็อก สับเบรกเกอร์ผิดตัว ส่วนสิ่งที่ PM พบ<b>ก่อน</b>จะเกิดเหตุให้บันทึกเป็น <a href="/help/findings">finding</a></p>
+<p>การบันทึก incident ทำตามกระบวนการบริหารความเสี่ยงของ ISO 31000: ประเมินความเสี่ยง จัดการ ประเมินใหม่หลังแก้ บันทึกไว้เป็นหลักฐาน และทบทวนภาพรวม ช่องข้อมูลยังครอบคลุม ISO 27001 ข้อ A.5.25 ถึง A.5.28 ด้วย incident <b>ไม่เปลี่ยน</b>สถานะ PM หรือตาราง Overview</p>
+
+<h2 id="log">บันทึก incident <span class="role">editor</span></h2>
+<p>กด <b class="ui">Log an incident</b> ที่หน้า <a href="/incidents">Incidents</a>, หน้า site, หน้า task หรือในหน้า finding (<b class="ui">log an incident</b> it led to) <b>บันทึกตั้งแต่ตอนที่ยังเกิดอยู่</b> แค่ชื่อเหตุ ประเภท เวลา และการประเมินความเสี่ยงก็พอ ที่เหลือค่อยเติมภายหลัง เมื่อบันทึกแล้วจะได้เลขอ้างอิงแบบ <code>INC-2026-007</code> นับใหม่ทุกปีตามปีที่เกิดเหตุ เลขนี้ไม่เปลี่ยนอีก</p>
+<div class="tbl"><table>
+  <thead><tr><th>ช่อง</th><th>กรอกอะไร</th></tr></thead>
+  <tbody>
+    <tr><td>What happened, in a line</td><td class="wrap">เหตุอะไร หนึ่งบรรทัด เช่น <i>UPS 2 went to bypass after a power module fault</i></td></tr>
+    <tr><td>Incident or near miss</td><td class="wrap">{{range $i, $c := incidentKinds}}{{if $i}}; {{end}}<b>{{$c.Label}}</b>: {{$c.Hint}}{{end}}</td></tr>
+    <tr><td>Kind</td><td class="wrap">แหล่งที่มาของความเสี่ยง: {{range $i, $c := incidentCategories}}{{if $i}}, {{end}}<b>{{$c.Label}}</b>{{end}}</td></tr>
+    <tr><td>Happened at</td><td class="wrap">วันและเวลาที่เกิด (ห้ามเป็นอนาคต)</td></tr>
+    <tr><td>Noticed at</td><td class="wrap">เวลาที่มีคนรู้ ถ้าช้ากว่าเวลาที่เกิด</td></tr>
+    <tr><td>Noticed through</td><td class="wrap">รู้ได้อย่างไร: {{range $i, $c := incidentDetections}}{{if $i}}, {{end}}<b>{{$c.Label}}</b>{{end}}</td></tr>
+    <tr><td>System</td><td class="wrap">ระบบที่เกี่ยวข้อง (ผ่าน PM task) หรือ <i>None, or several</i></td></tr>
+    <tr><td>Details</td><td class="wrap">เกิดอะไรตามลำดับ: alarm ค่าที่อ่านได้ อะไรได้รับผลกระทบและนานเท่าไร</td></tr>
+  </tbody>
+</table></div>
+
+<h2 id="rating">ประเมินความเสี่ยง</h2>
+<p>ทุก incident ให้คะแนนสามค่า:</p>
+<ul>
+  <li><b class="ui">Actual impact</b>: สิ่งที่เกิดขึ้นจริง 0 ถึง 5 โดย 0 (None) คือไม่กระทบอะไร ซึ่งก็คือ near miss</li>
+  <li><b class="ui">Worst credible consequence</b>: ผลที่แย่ที่สุดที่<b>อาจ</b>เกิดได้จริง 1 ถึง 5</li>
+  <li><b class="ui">Likelihood of happening again</b>: โอกาสเกิดซ้ำถ้าไม่ทำอะไรเพิ่ม 1 ถึง 5</li>
+</ul>
+<p><b>ระดับความเสี่ยง = likelihood × consequence</b> ระบบคำนวณให้ทันทีในฟอร์ม เหตุผลที่แยก “ผลจริง” ออกจาก “ผลที่แย่ที่สุด”: ไฟดับที่ generator รับไว้ได้ผลจริงแค่ <i>Minor</i> (เสีย redundancy) แต่ถ้า generator ไม่ติด ห้องจะดับทั้ง site ถ้าให้คะแนนแค่ผลจริง เหตุนี้จะดูเหมือนความเสี่ยงต่ำ ทั้งที่ไม่ใช่ near miss ก็ประเมินแบบเดียวกัน นี่คือเหตุผลที่ near miss มีค่าควรบันทึก</p>
+
+<p>ตารางด้านล่างอ่านจากโค้ดโดยตรง คำอธิบายจึงเป็นภาษาอังกฤษตามที่แสดงในฟอร์มและในหัวข้อ <b class="ui">How to rate</b></p>
+<h3 id="consequence">ระดับผลกระทบ (consequence)</h3>
+<div class="tbl"><table>
+  <thead><tr><th>ระดับ</th><th>สำหรับห้อง DC และ CSR</th></tr></thead>
+  <tbody>{{range consequenceScale}}<tr><td><b>{{.N}}</b> {{.Label}}</td><td class="wrap">{{.Hint}}</td></tr>{{end}}</tbody>
+</table></div>
+<h3 id="likelihood">ระดับโอกาส (likelihood)</h3>
+<div class="tbl"><table>
+  <thead><tr><th>ระดับ</th><th>โอกาสเกิดซ้ำถ้าไม่ทำอะไรเพิ่ม</th></tr></thead>
+  <tbody>{{range likelihoodScale}}<tr><td><b>{{.N}}</b> {{.Label}}</td><td class="wrap">{{.Hint}}</td></tr>{{end}}</tbody>
+</table></div>
+<h3 id="bands">ระดับความเสี่ยงและสิ่งที่ต้องทำ</h3>
+<div class="tbl"><table>
+  <thead><tr><th>ระดับ</th><th>คะแนน</th><th>ต้องทำอะไร</th></tr></thead>
+  <tbody>{{range riskBands}}<tr><td><span class="risk s-{{.Tone}} risk-{{.Key}}">{{.Label}}</span></td><td>{{.Min}}{{if eq .Key "extreme"}} ถึง 25{{else}} ขึ้นไป{{end}}</td><td class="wrap">{{.Hint}}</td></tr>{{end}}</tbody>
+</table></div>
+<table class="risk-matrix" aria-label="คะแนนในแต่ละช่องของ risk matrix">
+  <thead><tr><th scope="col" class="axis"><span class="axis-long">Likelihood ↓ / Consequence →</span><span class="axis-short" aria-hidden="true">L ↓ C →</span></th>{{range consequenceScale}}<th scope="col"><span class="lv">{{.N}}</span> {{.Label}}</th>{{end}}</tr></thead>
+  <tbody>{{range $l := likelihoodDown}}<tr><th scope="row"><span class="lv">{{$l.N}}</span> {{$l.Label}}</th>{{range consequenceScale}}{{$r := riskOf $l.N .N}}<td class="s-{{$r.Tone}} risk-{{$r.Key}}">{{$r.Score}}</td>{{end}}</tr>{{end}}</tbody>
+</table>
+<p class="tip">เกณฑ์เหล่านี้คือ risk criteria ที่ ISO 31000 (ข้อ 6.3.4) ให้องค์กรกำหนดเอง ถ้านโยบายความเสี่ยงของบริษัทใช้ถ้อยคำหรือช่วงคะแนนต่างจากนี้ developer แก้ได้ที่ <code>internal/core/incidents.go</code> ที่เดียว (<a href="/help/dev-contributing#risk-criteria">วิธีแก้</a>)</p>
+
+<h2 id="response">การตอบสนอง</h2>
+<p>สถานะของ incident เดินตามการตอบสนอง:</p>
+<div class="tbl"><table>
+  <thead><tr><th>สถานะ</th><th>หมายความว่า</th></tr></thead>
+  <tbody>
+    {{range incidentStatuses}}<tr><td><b>{{.Label}}</b></td><td class="wrap">{{.Hint}}</td></tr>{{end}}
+  </tbody>
+</table></div>
+<ul>
+  <li><b class="ui">Service restored at</b>: เวลาที่บริการกลับมาปกติ จำเป็นสำหรับ incident ตั้งแต่สถานะ Service restored ขึ้นไป ใช้คำนวณ <i>time to restore</i></li>
+  <li><b class="ui">Who follows it up</b> และ <b class="ui">Target date</b>: คนรับผิดชอบการแก้ไขและวันที่การแก้ต้องเสร็จ ถ้าเลยวันจะแสดง <span class="pill s-overdue">Action past target</span></li>
+  <li><b class="ui">Containment and recovery</b>: ทำอะไรเพื่อหยุดไม่ให้แย่ลงและกู้บริการ เมื่อไร</li>
+</ul>
+<p>incident ที่ยังควบคุมไม่ได้ ที่การแก้เลยกำหนด หรือที่ความเสี่ยง High ขึ้นไป จะขึ้นใน digest รายวัน</p>
+
+<h2 id="close">การปิด incident</h2>
+<p>ปิดได้เมื่อกรอกครบ:</p>
+<ol>
+  <li><b class="ui">Root cause</b>: ต้นเหตุ ถาม “ทำไม” จนเจอสิ่งที่แก้ได้</li>
+  <li><b class="ui">Action</b>: การแก้และการป้องกันไม่ให้เกิดอีก (corrective และ preventive) หรือเหตุผลที่ไม่ต้องทำอะไร</li>
+  <li><b class="ui">Treatment</b>: วิธีจัดการความเสี่ยงตาม ISO 31000 ข้อ 6.5.2:
+    <ul>{{range incidentTreatments}}<li><b>{{.Label}}</b>: {{.Hint}}</li>{{end}}</ul>
+  </li>
+  <li><b class="ui">Residual consequence</b> และ <b class="ui">Residual likelihood</b>: ประเมินความเสี่ยงใหม่<b>หลัง</b>การแก้เข้าที่แล้ว</li>
+  <li>สำหรับ incident (ไม่ใช่ near miss): เวลาที่บริการกลับมา</li>
+</ol>
+<p><b class="ui">Lessons learned</b> ไม่บังคับ แต่ควรเขียนสิ่งที่ site อื่นและทีมควรรู้ ระบบลิงก์กับ finding ที่เคยเตือนเรื่องนี้ได้ที่ <b class="ui">Linked finding</b></p>
+<p class="warn-box">ถ้าปิดทั้งที่ความเสี่ยงคงเหลือยัง <span class="risk s-overdue risk-high">High</span> หรือ <span class="risk s-overdue risk-extreme">Extreme</span> ถือว่า<b>ยอมรับความเสี่ยงนั้น</b> ISO 31000 ให้เป็นการตัดสินใจโดยรู้ข้อมูลของคนที่มีอำนาจ จึง<b>ต้องให้ admin ปิด</b> และระบบบันทึกชื่อ admin ไว้ editor ให้ตั้งสถานะ Service restored ไว้แล้วแจ้ง admin การเพิ่มความเสี่ยงคงเหลือของ incident ที่ปิดแล้วให้ถึง High ก็ต้องเป็น admin เช่นกัน</p>
+
+<h2 id="timeline">Timeline</h2>
+<p>ทุกครั้งที่กด <b class="ui">Save</b> ระบบเพิ่มรายการใน timeline ว่าใครเปลี่ยนอะไรเมื่อไร เช่น <i>Status: Open → Contained</i>, <i>Risk: High (3 × 5 = 15) → Extreme (4 × 5 = 20)</i>, <i>Root cause added</i> พร้อมข้อความในช่อง <b class="ui">What's happened since</b> ถ้ากรอก</p>
+<p>ระหว่างเกิดเหตุ ใช้ช่อง <b class="ui">Add an update</b> ใต้ timeline เพื่อจดความคืบหน้าทีละข้อ เช่น <i>14:20 vendor ถึง site</i> โดยไม่ต้องแก้ช่องอื่น</p>
+<p>รายการใน timeline <b>แก้หรือลบไม่ได้</b> และเก็บอยู่กับ incident ตลอดอายุของมัน ไม่ได้หายไปหลัง 90 วันเหมือน activity log จึงใช้เป็นหลักฐานสำหรับ audit ได้ (ISO 27001 A.5.28)</p>
+
+<h2 id="repeat">เมื่อเกิดซ้ำ</h2>
+<p>ในหน้า incident เดิมกด <b class="ui">Log this happening again</b> เพื่อสร้าง incident ใหม่ที่ผูกเป็น repeat หน้า incident จะแสดงทุกครั้งที่เกิดเรื่องเดียวกันที่ site นั้น เรียงตามเวลา</p>
+
+<h2 id="measures">หน้า Incidents: ตัววัดและ risk matrix</h2>
+<figure>
+  <img src="{{asset "help/incidents.webp"}}" alt="หน้า Incidents: ตัววัดหกช่องและ risk matrix 5 × 5" width="1000" height="484" loading="lazy">
+  <figcaption>ตัววัดและ risk matrix จากข้อมูล demo</figcaption>
+</figure>
+<div class="tbl"><table>
+  <thead><tr><th>ตัววัด</th><th>อ่านอย่างไร</th></tr></thead>
+  <tbody>
+    <tr><td>Open</td><td class="wrap">ที่ยังเปิดอยู่ กี่รายการยังควบคุมอยู่ (Open หรือ Contained) และกี่รายการ High ขึ้นไป</td></tr>
+    <tr><td>Actions past target</td><td class="wrap">การแก้ที่เลยวันเป้าหมาย ควรเป็นศูนย์</td></tr>
+    <tr><td>Time to restore</td><td class="wrap">ค่ามัธยฐานของเวลาจากเกิดเหตุถึงบริการกลับมา (12 เดือนล่าสุด)</td></tr>
+    <tr><td>Days to close</td><td class="wrap">ค่ามัธยฐานของจำนวนวันจากเกิดเหตุถึงปิด</td></tr>
+    <tr><td>Near misses per incident</td><td class="wrap">ยิ่งสูงยิ่งดี แปลว่าทีมรายงานสิ่งที่เกือบเกิดก่อนจะกลายเป็นเหตุจริง</td></tr>
+    <tr><td>Happened again</td><td class="wrap">สัดส่วนที่เป็นเหตุเดิมเกิดซ้ำ และสัดส่วนที่รู้จาก alarm (ถ้าส่วนใหญ่รู้จากผู้ใช้ แปลว่าระบบเตือนยังไม่พอ)</td></tr>
+  </tbody>
+</table></div>
+<p><b>Risk matrix</b> นับ incident ที่ยังเปิดและที่เกิดใน 12 เดือนล่าสุด ตาม<b>ความเสี่ยงปัจจุบัน</b>: ใช้ residual เมื่อประเมินใหม่แล้ว ไม่อย่างนั้นใช้ค่าที่ประเมินตอนแรก เมื่อแก้ไขได้ผล รายการจะเลื่อนลงและไปทางซ้าย กดตัวเลขในช่องเพื่อดูรายการในช่องนั้น</p>
+<p>ใต้รายการมีตารางแยกตามประเภท (By kind) และตาม site (By site) ตัวกรองเลือก site, สถานะ, incident หรือ near miss, ประเภท และระดับความเสี่ยงปัจจุบันได้ ปุ่ม <b class="ui">Export CSV</b> ดาวน์โหลดทุก incident รวมคะแนนทั้งหมดและจำนวนรายการใน timeline</p>
+
+<h2 id="rules">กฎอื่น ๆ</h2>
+<ul>
+  <li>incident เป็นหลักฐานสำหรับ audit จึง<b>ลบได้เฉพาะ admin</b> และควรลบเฉพาะที่บันทึกผิด</li>
+  <li>site ที่มี incident <b>ลบไม่ได้</b> ให้ archive แทน</li>
+  <li>ถ้าลบ PM task หรือ finding ที่ผูกไว้ incident ยังอยู่ เพียงแค่ไม่มีลิงก์แล้ว</li>
+</ul>
+{{end}}

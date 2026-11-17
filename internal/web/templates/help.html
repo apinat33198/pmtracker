@@ -1,0 +1,76 @@
+{{define "content"}}{{$d := .Data}}
+<div class="help">
+  <aside class="help-side">
+    <form class="help-search" method="get" action="/help/search" role="search">
+      <label class="visually-hidden" for="help-q">ค้นหาในคู่มือ</label>
+      <input id="help-q" name="q" type="search" value="{{$d.Query}}" placeholder="ค้นหาในคู่มือ" maxlength="100">
+      <button class="ghost" aria-label="ค้นหา"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.5"/><path d="M10.4 10.4 14 14"/></svg></button>
+    </form>
+    <details class="help-nav" open>
+      <summary>สารบัญคู่มือ</summary>
+      <nav aria-label="สารบัญคู่มือ">
+        <a class="help-home{{if and (not $d.Page.Slug) (not $d.Search)}} on{{end}}" href="/help"{{if and (not $d.Page.Slug) (not $d.Search)}} aria-current="page"{{end}}>หน้าแรกของคู่มือ</a>
+        {{range $d.Groups}}
+        <p class="help-group">{{.Name}}</p>
+        <ul>{{range .Pages}}<li><a href="/help/{{.Slug}}"{{if eq .Slug $d.Page.Slug}} class="on" aria-current="page"{{end}}>{{.Title}}</a></li>{{end}}</ul>
+        {{end}}
+      </nav>
+    </details>
+  </aside>
+
+  <article class="help-main">
+  {{if $d.Search}}
+    <p class="crumb"><a href="/help">คู่มือ</a></p>
+    <h1>ค้นหาในคู่มือ</h1>
+    {{if $d.Query}}
+      <p class="lede">{{len $d.Results}} หน้าที่มีคำว่า “{{$d.Query}}”</p>
+      <ol class="help-results">
+      {{range $d.Results}}<li><a href="/help/{{.Page.Slug}}">{{.Page.Title}}</a><span class="sub">{{.Page.Group}}</span><p>{{.Snippet}}</p></li>
+      {{else}}<li class="empty">ไม่พบ ลองใช้คำที่สั้นลง หรือชื่อปุ่มตามที่เห็นในแอป เช่น Confirm done</li>{{end}}
+      </ol>
+    {{else}}
+      <p class="lede">พิมพ์คำที่ต้องการหา เช่น ชื่อปุ่มในแอป (Confirm done), ชื่อสถานะ (Off-cycle) หรือหัวข้อ (backup)</p>
+    {{end}}
+
+  {{else if $d.Page.Slug}}
+    <p class="crumb"><a href="/help">คู่มือ</a><span>{{$d.Page.Group}}</span></p>
+    <h1>{{$d.Page.Title}}</h1>
+    {{with $d.TOC}}
+    <nav class="help-onpage" aria-label="ในหน้านี้">
+      <p>ในหน้านี้</p>
+      <ul>{{range .}}<li><a href="#{{.ID}}">{{.Text}}</a></li>{{end}}</ul>
+    </nav>
+    {{end}}
+    <div class="help-body">
+{{$d.Body}}
+    </div>
+    <nav class="help-pager" aria-label="หน้าก่อนและถัดไป">
+      {{with $d.Prev.Slug}}<a class="prev" href="/help/{{.}}"><span class="sub">ก่อนหน้า</span>{{$d.Prev.Title}}</a>{{else}}<span></span>{{end}}
+      {{with $d.Next.Slug}}<a class="next" href="/help/{{.}}"><span class="sub">ถัดไป</span>{{$d.Next.Title}}</a>{{end}}
+    </nav>
+
+  {{else}}
+    <h1>คู่มือ PM Tracker</h1>
+    <p class="lede">วิธีใช้ทุกหน้าและทุกปุ่มของ PM Tracker สำหรับคนที่ดูแลงาน PM ประจำวัน, admin ที่ตั้งค่าระบบ และ developer ที่ดูแลโค้ด ชื่อปุ่มและเมนูเขียนเป็นภาษาอังกฤษตามที่เห็นในแอป</p>
+    <div class="help-start">
+      <a href="/help/start"><b>เพิ่งเริ่มใช้</b><span>อ่าน “PM Tracker ทำอะไร” และ “สถานะและการคำนวณรอบ PM” ก่อน สองหน้านี้อธิบายคำที่ใช้ทั้งแอป</span></a>
+      <a href="/help/overview"><b>ใช้งานทุกวัน</b><span>เริ่มที่หน้า Overview แล้วไล่ตามรายการที่เลยกำหนด ยืนยัน visit และดู Review inbox</span></a>
+      {{if .IsAdmin}}<a href="/help/admin-sites"><b>Admin</b><span>ตั้ง site, task, vendor, ปฏิทิน, ผู้ใช้ และ backup</span></a>{{end}}
+    </div>
+    {{range $d.Groups}}
+    <h2>{{.Name}}</h2>
+    <ul class="help-cards">
+      {{range .Pages}}<li><a href="/help/{{.Slug}}"><b>{{.Title}}</b><span>{{.Summary}}</span></a></li>{{end}}
+    </ul>
+    {{end}}
+  {{end}}
+  </article>
+</div>
+<script>
+// The table of contents starts closed on phones, where it sits above the page.
+(function () {
+  var nav = document.querySelector(".help-nav");
+  if (nav && window.matchMedia("(max-width: 960px)").matches) nav.open = false;
+})();
+</script>
+{{end}}

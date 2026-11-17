@@ -1,0 +1,63 @@
+{{define "helpbody"}}
+<h2 id="setup">เริ่มพัฒนา</h2>
+<pre><code>git clone https://github.com/apinat33198/pmtracker &amp;&amp; cd pmtracker
+go run ./cmd/pmtracker -demo                     # http://localhost:8080 (admin / editor / viewer, รหัส demo)
+go run ./cmd/pmtracker -demo -today 2027-01-15   # สมมติว่าเป็นวันอื่น
+go run ./cmd/pmtracker -demo -keep               # เก็บสิ่งที่แก้ไว้ข้ามการรีสตาร์ต
+go test ./...
+go vet ./...</code></pre>
+<p>build ด้วย Go รุ่นที่ยังได้ security fix (1.26 หรือ 1.27 ณ พ.ย. 2026) รัน <code>govulncheck ./...</code> เป็นระยะ</p>
+
+<h2 id="tests">เทสต์</h2>
+<ul>
+  <li><code>internal/core</code>: matcher, forecast, การบวกเดือน, roll-up, import, job, finding, incident (การตรวจ, ลิงก์, ระดับความเสี่ยง, ตัววัด, matrix)</li>
+  <li><code>internal/store</code>: บันทึกและอ่านกลับ, การล้างลิงก์, restore ที่ปลอดภัย, activity log, timeline ที่แก้ไม่ได้, sync ที่ไม่เขียนไฟล์</li>
+  <li><code>internal/web</code>: ทุกหน้า render ได้โดยไม่มีค่าที่หายหรือไม่ปลอดภัย, บทบาท, admin, sign in (session, cookie ปลอม, cross-site POST, open redirect, lockout), flow ของ job, finding, incident และคู่มือนี้</li>
+  <li>เทสต์ web ใช้ <code>demoServer</code> ซึ่งตั้งนาฬิกาไว้ที่ 3 พ.ย. 2026 09:00 ผลจึงคงที่</li>
+</ul>
+
+<h2 id="style">แนวทางเขียนโค้ด</h2>
+<ul>
+  <li><b>standard library เท่านั้น</b> ถ้าจะเพิ่ม dependency (เช่น SQLite) ให้ตัดสินใจเป็นเรื่องเป็นราว</li>
+  <li><b>ตรรกะอยู่ใน core</b> handler ใน web แค่อ่านฟอร์ม เรียก store และ render</li>
+  <li><b>ข้อความในแอปเป็นภาษาอังกฤษเรียบง่าย</b> บอกว่าเกิดอะไรและทำอะไรต่อ error บอกวิธีแก้ (“enter the root cause before closing it”) ไม่ใช่รหัส error</li>
+  <li><b>ทุกการเปลี่ยนข้อมูลมี action</b> สำหรับ activity log ที่บอกว่าอะไรเปลี่ยนในบรรทัดเดียว</li>
+  <li><b>ป้องกันสูตร CSV</b> ด้วย <code class="fn">web.csvCell</code> ทุกช่องที่เป็นข้อความจากผู้ใช้</li>
+  <li><b>template</b> ใช้ <code>html/template</code> ซึ่ง escape ให้เอง ไม่ใช้ <code>template.HTML</code> กับข้อมูลผู้ใช้</li>
+</ul>
+
+<h2 id="new-record">เพิ่มข้อมูลชนิดใหม่: เช็กลิสต์</h2>
+<p>ใช้ job, finding และ incident เป็นตัวอย่าง:</p>
+<ol class="steps">
+  <li><b>core</b>: struct, ตัวเลือก (<code>[]Choice</code>), <code>Clean()</code> ที่จัดข้อความและตรวจทุกค่า, <code>CheckLinks()</code> ถ้าอ้างถึงของอื่น, view สำหรับแสดงผล, ฟังก์ชัน build ที่เรียงลำดับ, ตัววัด เพิ่มลง <code>Inputs</code> และ <code>Snapshot</code> และ <code>core.Build</code></li>
+  <li><b>store</b>: field ใน <code>state</code> (มี <code>omitempty</code>), รวมในการหา <code>next_id</code> ใน <code>normalize</code>, ฟังก์ชัน tidy ที่ล้างลิงก์เมื่อของที่อ้างถึงหายไป (เรียกใน normalize และ cleanup), ฟังก์ชันตรวจตอน restore, method Add/Update/Delete ที่ย้อนกลับเมื่อบันทึกไม่สำเร็จ, เพิ่ม <code>currentVersion</code> ถ้าต้องให้ main รุ่นเก่าปฏิเสธไฟล์สำรอง</li>
+  <li><b>web</b>: handler, route พร้อมบทบาท (ลบที่เป็นหลักฐานให้ admin เท่านั้น), template, ฟังก์ชัน template สำหรับตัวเลือก, CSV, ลิงก์จากหน้าที่เกี่ยวข้อง, ตัวเลขในเมนูถ้าควรมี</li>
+  <li><b>digest</b> ถ้ามีสิ่งที่ต้องตามทุกวัน</li>
+  <li><b>demo</b>: ข้อมูลตัวอย่างที่ผ่าน <code>Clean</code> และเทสต์ที่ render ทุกหน้า</li>
+  <li><b>เทสต์</b>ทั้งสามชั้น และ <b>README</b></li>
+  <li><b>คู่มือนี้</b> (ข้อถัดไป)</li>
+</ol>
+
+<h2 id="help">ดูแลคู่มือนี้</h2>
+<ul>
+  <li>หน้าคู่มืออยู่ที่ <code>internal/web/templates/help/&lt;slug&gt;.html</code> แต่ละไฟล์ define <code>helpbody</code> ลำดับ กลุ่ม ชื่อ และคำอธิบายของหน้าอยู่ใน <code>helpPages</code> ใน <code>internal/web/help.go</code></li>
+  <li>หน้าคู่มือใช้ฟังก์ชัน template ของแอปได้ เช่น <code>consequenceScale</code>, <code>findingSeverities</code> และอ่านค่า config ได้ที่ <code>.Cfg</code> ดังนั้นตาราง rating และค่าเริ่มต้นในคู่มือตรงกับโค้ดและเซิร์ฟเวอร์เสมอ ใช้แบบนี้แทนการพิมพ์ค่าเองเมื่อทำได้</li>
+  <li><code>&lt;h2 id="…"&gt;</code> กลายเป็นรายการ “ในหน้านี้” อัตโนมัติ</li>
+  <li>รูปหน้าจออยู่ที่ <code>internal/web/static/help/*.webp</code> (กว้าง 1000 px คุณภาพ 72) ถ่ายจากโหมด demo</li>
+  <li>เทสต์ <code>TestHelp…</code> ตรวจว่า: ทุกหน้าใน <code>helpPages</code> มีไฟล์และ render ได้, ลิงก์ภายในทุกลิงก์เปิดได้ (รวม #anchor ในคู่มือ), และทุกชื่อใน <code>&lt;code class="fn"&gt;</code> ในหน้า <a href="/help/dev-functions">ฟังก์ชันหลัก</a> มีอยู่จริงในโค้ด</li>
+</ul>
+
+<h2 id="risk-criteria">เปลี่ยนเกณฑ์ความเสี่ยงของ incident</h2>
+<p>ถ้านโยบายความเสี่ยงของบริษัทใช้เกณฑ์อื่น แก้ใน <code>internal/core/incidents.go</code> ที่เดียว:</p>
+<ul>
+  <li><code>ConsequenceScale</code> และ <code>LikelihoodScale</code>: ชื่อและคำอธิบายของแต่ละระดับ (ต้องมี 5 ระดับ เพราะ matrix เป็น 5 × 5)</li>
+  <li><code>RiskBands</code>: ชื่อ คำอธิบาย และคะแนนต่ำสุดของแต่ละช่วง</li>
+</ul>
+<p>หน้าฟอร์ม หน้า Incidents และคู่มือนี้อ่านจากค่าเหล่านี้ทั้งหมด จึงเปลี่ยนตามกันทันที ข้อมูลที่บันทึกไว้เก็บเป็นตัวเลข 1 ถึง 5 จึงไม่ต้องย้ายข้อมูล แต่ระดับของ incident เดิมจะคิดใหม่ตามช่วงคะแนนใหม่ ปรับเทสต์ <code>TestRiskBands</code> ตาม</p>
+
+<h2 id="git">Git</h2>
+<ul>
+  <li>ทำงานบน branch แล้ว merge เข้า main หลังลองด้วย demo และบน container</li>
+  <li>เปิด 2FA และ branch protection บน GitHub: ใครก็ตามที่ push ได้ ทำให้โค้ดของเขารันเป็น root ใน container ในการอัปเดตครั้งถัดไป</li>
+</ul>
+{{end}}

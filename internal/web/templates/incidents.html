@@ -2,7 +2,7 @@
 <section class="page-head with-tools">
   <div>
     <h1>Incidents{{with $d.SiteName}} at {{.}}{{end}}</h1>
-    <p class="lede">Power and cooling failures, leaks, alarms and near misses, rated by what could have happened and how likely it is to happen again, then treated and re-rated (ISO 31000). Incidents don't change any PM date or status.</p>
+    <p class="lede">Power and cooling failures, leaks, alarms and near misses, rated by what could have happened and how likely it is to happen again, then treated and re-rated (ISO 31000). Incidents don't change any PM date or status. <a class="help-link" href="/help/incidents">Help</a></p>
   </div>
   <div class="tools">{{if .IsEditor}}<a class="button" href="{{$d.NewLink}}">Log an incident</a>{{end}}<a class="button ghost" href="/incidents.csv">Export CSV</a></div>
 </section>

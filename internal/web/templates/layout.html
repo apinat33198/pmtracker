@@ -37,6 +37,7 @@
     <div class="menu">
       <p class="menu-who"><span><b>{{.User.Name}}</b><span class="sub">Signed in</span></span><span class="tag">{{.User.Role}}</span></p>
       <a href="/account"{{if eq .Nav "account"}} aria-current="page"{{end}}>Your account</a>
+      <a href="/help"{{if eq .Nav "help"}} aria-current="page"{{end}}>Help (คู่มือ)</a>
       <form method="post" action="/logout"><button type="submit" class="menu-item">Sign out</button></form>
     </div>
   </details>
@@ -46,7 +47,7 @@
   {{end}}
  </div>
 </header>
-{{if .Demo}}<p class="demo-bar"><b>Demo data:</b> 21 sites with events generated around today. {{if .User.SignedIn}}Changes you make are saved to the demo data file.{{else}}Anyone can look; sign in as admin, editor or viewer (password <b>demo</b>) to make changes.{{end}}</p>{{end}}
+{{if .Demo}}<p class="demo-bar"><b>Demo data:</b> 21 sites with events generated around today. {{if .User.SignedIn}}Changes you make are saved to the demo data file.{{else}}Anyone can look; sign in as admin, editor or viewer (password <b>demo</b>) to make changes.{{end}} <a href="/help">Help (คู่มือ)</a></p>{{end}}
 <div class="flashes">
 {{range .SyncErrors}}<p class="flash error" role="alert">Calendar sync is failing. {{.}}</p>{{end}}
 {{with .Msg}}<p class="flash {{$.MsgKind}}" role="status">{{.}}</p>{{end}}

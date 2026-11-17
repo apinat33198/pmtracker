@@ -1,0 +1,40 @@
+{{define "helpbody"}}
+<p><b>Ad-hoc job</b> คืองานครั้งเดียวที่ site ซึ่งไม่อยู่ในรอบ PM เช่น ซ่อมพื้นยก เปลี่ยนเครื่องอ่านบัตร ล้างท่อน้ำทิ้ง CRAC งานพวกนี้<b>ไม่เปลี่ยน</b>วันครบกำหนด สถานะ PM ตาราง Overview หรือตัวเลขของ vendor ใด ๆ</p>
+
+<h2 id="where">ดูได้ที่ไหน</h2>
+<ul>
+  <li><a href="/jobs">Jobs</a> ในเมนู: งานที่เปิดอยู่ทั้งหมด และงานที่เสร็จแล้ว (แสดงล่าสุด 100 รายการ ที่เหลืออยู่ใน CSV) ตัวเลขข้างเมนูคือจำนวนที่เปิดอยู่</li>
+  <li>หน้า site: งานของ site นั้น งานที่เสร็จแล้วพับไว้ใต้ <b class="ui">Done jobs</b></li>
+  <li>ท้ายหน้า Overview: งานที่เปิดอยู่ 8 รายการแรก</li>
+</ul>
+
+<h2 id="status">สีและสถานะ</h2>
+<div class="tbl"><table>
+  <thead><tr><th>สถานะ</th><th>หมายความว่า</th></tr></thead>
+  <tbody>
+    <tr><td><span class="pill s-overdue">Late</span></td><td class="wrap">เลยวันที่กำหนดแล้วยังไม่เสร็จ</td></tr>
+    <tr><td><span class="pill s-due_soon">Today</span></td><td class="wrap">กำหนดวันนี้</td></tr>
+    <tr><td><span class="pill s-booked">Open</span></td><td class="wrap">กำหนดวันหลังจากนี้</td></tr>
+    <tr><td><span class="pill s-on_track">Done</span></td><td class="wrap">เสร็จแล้ว แสดงวันที่เสร็จและใครกด</td></tr>
+  </tbody>
+</table></div>
+
+<h2 id="add">เพิ่มงาน <span class="role">editor</span></h2>
+<p>ใช้ฟอร์ม <b class="ui">Add a job</b> ที่หน้า Jobs (เลือก site) หรือที่หน้า site:</p>
+<ul>
+  <li><b class="ui">Job</b>: งานอะไร ไม่เกิน 200 ตัวอักษร</li>
+  <li><b class="ui">Date</b>: วันที่วางแผนหรือวันที่ต้องเสร็จ</li>
+  <li><b class="ui">Who does it</b>: vendor, ผู้รับเหมา หรือคน ระบบเสนอชื่อที่เคยใช้ให้เลือก</li>
+  <li><b class="ui">Note</b>: ตรงไหน เลขใบเสนอราคา หรือเลข ticket</li>
+</ul>
+
+<h2 id="manage">ปิด แก้ เปิดใหม่ ลบ <span class="role">editor</span></h2>
+<ul>
+  <li><b class="ui">Done</b>: ปิดงานโดยใช้วันนี้เป็นวันที่เสร็จ</li>
+  <li><b class="ui">Edit…</b>: แก้ชื่องาน วันที่ คนทำ หมายเหตุ และวันที่เสร็จ (ถ้าเสร็จแล้ว)</li>
+  <li><b class="ui">Reopen</b> (งานที่เสร็จแล้ว อยู่ใน Edit…): เปิดงานใหม่</li>
+  <li><b class="ui">Delete job</b> (อยู่ใน Edit…): ลบงานที่ใส่ผิด</li>
+</ul>
+<p>งานที่ถึงวันหรือเลยวันจะอยู่ใน digest รายวันด้วย ทุกการเพิ่ม แก้ ปิด และลบอยู่ใน activity log และ backup ปุ่ม <b class="ui">Export CSV</b> ที่หน้า Jobs ดาวน์โหลดงานทั้งหมด</p>
+<p class="tip">ถ้างานนั้นมาจากสิ่งที่ PM พบ เช่น แบตเตอรี่เสื่อม ให้บันทึกเป็น <a href="/help/findings">finding</a> ด้วย finding เก็บสาเหตุ สิ่งที่ทำ และการเกิดซ้ำ ซึ่ง job ไม่เก็บ</p>
+{{end}}

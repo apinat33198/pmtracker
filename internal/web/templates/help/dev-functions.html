@@ -1,0 +1,143 @@
+{{define "helpbody"}}
+<p>ฟังก์ชันและ method หลักของแต่ละ package เรียงตามที่เจอเมื่ออ่านโค้ด ชื่อเขียนแบบ <code>package.Type.Method</code> รายชื่อในหน้านี้ถูกตรวจโดยเทสต์ <code>TestHelpFunctionsExist</code> ถ้าเปลี่ยนชื่อหรือลบฟังก์ชันแล้วไม่แก้หน้านี้ เทสต์จะไม่ผ่าน รายการเต็มดูได้ด้วย <code>go doc -all ./internal/&lt;package&gt;</code></p>
+
+<h2 id="main">cmd/pmtracker</h2>
+<div class="tbl"><table>
+  <thead><tr><th>ฟังก์ชัน</th><th>หน้าที่</th></tr></thead>
+  <tbody>
+    <tr><td><code class="fn">main.main</code></td><td class="wrap">อ่าน flag (<code>-config</code>, <code>-demo</code>, <code>-keep</code>, <code>-addr</code>, <code>-data</code>, <code>-today</code>) และคำสั่ง แล้วเรียก run</td></tr>
+    <tr><td><code class="fn">main.run</code></td><td class="wrap">โหลด config หรือ demo, เลือกแหล่งปฏิทิน (Google, ไม่ได้ต่อ, หรือ demo), เปิด store, สร้าง catalog ตั้งต้น, รันคำสั่ง หรือเริ่ม server พร้อม syncer, backup และ digest</td></tr>
+    <tr><td><code class="fn">main.demoSeed</code></td><td class="wrap">sync ปฏิทิน demo สองรอบ ยืนยัน visit เก่า และใส่ job, finding, incident ตัวอย่าง</td></tr>
+    <tr><td><code class="fn">main.check</code></td><td class="wrap">คำสั่ง <code>check</code>: ทดสอบ key และทุกปฏิทิน นับ event และผลการจับคู่ โดยไม่แตะ store</td></tr>
+    <tr><td><code class="fn">main.hashPassword</code></td><td class="wrap">คำสั่ง <code>hash-password</code>: อ่านรหัสผ่านแบบไม่แสดงบนจอ แล้วพิมพ์ hash สำหรับ <code>auth.users</code></td></tr>
+  </tbody>
+</table></div>
+
+<h2 id="config">internal/config</h2>
+<div class="tbl"><table>
+  <thead><tr><th>ฟังก์ชัน</th><th>หน้าที่</th></tr></thead>
+  <tbody>
+    <tr><td><code class="fn">config.Load</code>, <code class="fn">config.Parse</code></td><td class="wrap">อ่านไฟล์หรือ bytes, ใส่ค่าเริ่มต้น, ตรวจทุกค่า และรวมปัญหาทั้งหมดไว้ใน error เดียว</td></tr>
+    <tr><td><code class="fn">config.Config.Location</code></td><td class="wrap">timezone ของงาน (ทุกวันที่ในแอปคิดตาม timezone นี้)</td></tr>
+    <tr><td><code class="fn">config.Config.IsHoliday</code></td><td class="wrap">วันนั้นอยู่ใน <code>holidays</code> หรือไม่ ใช้แนะนำวันนัดแทนวันหยุด</td></tr>
+    <tr><td><code class="fn">config.Config.HTTPS</code></td><td class="wrap"><code>public_url</code> เป็น https หรือไม่ ใช้ตัดสิน Secure cookie, HSTS และการไม่รับรหัสผ่านผ่าน HTTP</td></tr>
+    <tr><td><code class="fn">config.Config.TrustedProxy</code></td><td class="wrap">ที่อยู่นั้นเป็น proxy ที่เชื่อ X-Forwarded-For ได้หรือไม่</td></tr>
+    <tr><td><code class="fn">config.Config.SecretProblems</code></td><td class="wrap">ปัญหาของความลับใน config เช่น feed token สั้นเกินไปหรือเป็นค่าตัวอย่าง server ไม่เริ่มถ้ามี</td></tr>
+    <tr><td><code class="fn">config.RoleRank</code></td><td class="wrap">ลำดับของบทบาท viewer &lt; editor &lt; admin</td></tr>
+  </tbody>
+</table></div>
+
+<h2 id="core">internal/core</h2>
+<h3>Snapshot และ forecast</h3>
+<div class="tbl"><table>
+  <thead><tr><th>ฟังก์ชัน</th><th>หน้าที่</th></tr></thead>
+  <tbody>
+    <tr><td><code class="fn">core.Build</code></td><td class="wrap">หัวใจของแอป: จาก Inputs สร้าง Snapshot ที่มี event พร้อมผลจับคู่, visit, forecast ทุก task, สรุปต่อ site และ vendor, upcoming, inbox, job, finding และ incident</td></tr>
+    <tr><td><code class="fn">core.NewMatcher</code>, <code class="fn">core.Matcher.Match</code></td><td class="wrap">ตัดสินว่า event เป็น PM ไหม ของ site, system และ vendor ไหน ผูกกับ task ใด พร้อมเหตุผล (Reasons) และสิ่งที่ขาด (Missing) ตามลำดับใน <a href="/help/admin-calendars#matching">การจับคู่</a></td></tr>
+    <tr><td><code class="fn">core.NewForecaster</code>, <code class="fn">core.Forecaster.For</code></td><td class="wrap">คำนวณ forecast ของ task หนึ่งจาก visit: PM ล่าสุด, นัด, วันครบกำหนด (rolling หรือ fixed slots), สถานะ, วันแนะนำแทนวันหยุด และสามรอบข้างหน้า</td></tr>
+    <tr><td><code class="fn">core.SortForecasts</code></td><td class="wrap">เรียงตามความเร่งของสถานะ แล้วตามวันที่เหลือ</td></tr>
+    <tr><td><code class="fn">core.Digest</code></td><td class="wrap">ข้อความ digest รายวันจาก snapshot (ว่างถ้าไม่มีอะไรต้องทำ)</td></tr>
+    <tr><td><code class="fn">core.ForecastICS</code></td><td class="wrap">ฟีด iCalendar ของวันครบกำหนดและสามรอบข้างหน้า</td></tr>
+    <tr><td><code class="fn">core.AddMonthsClamp</code></td><td class="wrap">บวกเดือนแบบไม่ล้นเดือน (30 พ.ย. + 3 เดือน = 28 ก.พ.)</td></tr>
+    <tr><td><code class="fn">core.Day</code>, <code class="fn">core.DaysBetween</code></td><td class="wrap">ตัดเวลาเหลือวัน และนับวันระหว่างสองวันโดยไม่สนเวลาออมแสง</td></tr>
+    <tr><td><code class="fn">core.NearestWorkingDay</code></td><td class="wrap">วันทำงานที่ใกล้ที่สุดเมื่อวันครบกำหนดตรงวันหยุด</td></tr>
+  </tbody>
+</table></div>
+<h3>Catalog และ import</h3>
+<div class="tbl"><table>
+  <thead><tr><th>ฟังก์ชัน</th><th>หน้าที่</th></tr></thead>
+  <tbody>
+    <tr><td><code class="fn">core.Catalog.Validate</code></td><td class="wrap">ตรวจความสอดคล้องทั้งหมด: รหัสไม่ซ้ำ, task ชี้ site, system, vendor ที่มีจริง, fixed slots มีวันแรก ฯลฯ ใช้ทุกครั้งที่บันทึกและตอน restore</td></tr>
+    <tr><td><code class="fn">core.Catalog.Tidy</code></td><td class="wrap">จัดเรียงและล้างข้อความก่อนบันทึก</td></tr>
+    <tr><td><code class="fn">core.Catalog.AddTask</code></td><td class="wrap">เพิ่ม task พร้อมสร้าง ID ที่ไม่ซ้ำ</td></tr>
+    <tr><td><code class="fn">core.Catalog.EnsureVendor</code>, <code class="fn">core.Catalog.EnsureSystem</code></td><td class="wrap">หา vendor หรือ system จากชื่อหรือชื่ออื่น ถ้าไม่มีก็สร้าง (ใช้ในฟอร์มและ import กันการซ้ำ)</td></tr>
+    <tr><td><code class="fn">core.Catalog.TasksAt</code>, <code class="fn">core.Catalog.TaskLabel</code></td><td class="wrap">task ของ site หนึ่ง และชื่อที่อ่านง่ายของ task</td></tr>
+    <tr><td><code class="fn">core.ApplyImport</code></td><td class="wrap">อ่าน CSV import ใส่ลง catalog สำเนา คืนผลรายบรรทัดและ visit ที่จะบันทึก ไม่มีผลถ้ามี error</td></tr>
+    <tr><td><code class="fn">core.ParseDate</code></td><td class="wrap">อ่านวันที่สามรูปแบบรวมปี พ.ศ.</td></tr>
+  </tbody>
+</table></div>
+<h3>Job, finding และ incident</h3>
+<div class="tbl"><table>
+  <thead><tr><th>ฟังก์ชัน</th><th>หน้าที่</th></tr></thead>
+  <tbody>
+    <tr><td><code class="fn">core.Job.Clean</code></td><td class="wrap">จัดข้อความและตรวจ job</td></tr>
+    <tr><td><code class="fn">core.Finding.Clean</code>, <code class="fn">core.Finding.CheckLinks</code></td><td class="wrap">ตรวจ finding: ค่าที่เลือก วันที่ การปิดต้องมีสิ่งที่ทำ; และลิงก์ไป site, task, finding เดิม (repeat ต้องเก่ากว่าและอยู่ site เดียวกัน)</td></tr>
+    <tr><td><code class="fn">core.StatsOf</code>, <code class="fn">core.FindingsBySite</code>, <code class="fn">core.FindingsByVendor</code></td><td class="wrap">ตัววัดของ finding และแยกตาม site และ vendor</td></tr>
+    <tr><td><code class="fn">core.Incident.Clean</code></td><td class="wrap">ตรวจ incident: incident ต้องมีผลกระทบ near miss ต้องไม่มี, ผลที่แย่ที่สุดไม่น้อยกว่าผลจริง, เวลาเรียงถูก, เงื่อนไขการปิด</td></tr>
+    <tr><td><code class="fn">core.Incident.CheckLinks</code></td><td class="wrap">ลิงก์ไป site, task, finding และ incident เดิม</td></tr>
+    <tr><td><code class="fn">core.RiskOf</code></td><td class="wrap">likelihood × consequence เป็นคะแนนและระดับ (low, medium, high, extreme)</td></tr>
+    <tr><td><code class="fn">core.IncidentChanges</code></td><td class="wrap">อธิบายความต่างระหว่างสองเวอร์ชันของ incident เป็นข้อความสำหรับ timeline</td></tr>
+    <tr><td><code class="fn">core.NextIncidentRef</code></td><td class="wrap">เลขอ้างอิงถัดไป INC-ปี-ลำดับ</td></tr>
+    <tr><td><code class="fn">core.IncidentStatsOf</code>, <code class="fn">core.RiskMatrix</code></td><td class="wrap">ตัววัดของ incident และตาราง 5 × 5 ตามความเสี่ยงปัจจุบัน</td></tr>
+    <tr><td><code class="fn">core.buildFindings</code>, <code class="fn">core.buildIncidents</code></td><td class="wrap">สร้าง view (วันที่, อายุ, การเกิดซ้ำ, ระดับความเสี่ยง) และเรียงลำดับสำหรับ snapshot</td></tr>
+  </tbody>
+</table></div>
+
+<h2 id="store">internal/store</h2>
+<div class="tbl"><table>
+  <thead><tr><th>ฟังก์ชัน</th><th>หน้าที่</th></tr></thead>
+  <tbody>
+    <tr><td><code class="fn">store.Open</code></td><td class="wrap">อ่านไฟล์ข้อมูล (หรือเริ่มว่าง), normalize, อัปเกรดเวอร์ชัน, เปิด activity log และย้ายบันทึกเก่าออกจากไฟล์ข้อมูล</td></tr>
+    <tr><td><code class="fn">store.Store.Inputs</code>, <code class="fn">store.Store.Catalog</code></td><td class="wrap">สำเนาข้อมูลสำหรับ core.Build และสำเนา catalog (แก้สำเนาได้โดยไม่กระทบ store)</td></tr>
+    <tr><td><code class="fn">store.Store.UpdateCatalog</code></td><td class="wrap">แก้ catalog แบบ transaction: ใช้ฟังก์ชันกับสำเนา, Tidy, Validate, ล้างสิ่งที่อ้างถึง task หรือปฏิทินที่หายไป แล้วบันทึก</td></tr>
+    <tr><td><code class="fn">store.Store.ApplySync</code>, <code class="fn">store.Store.SetSyncError</code></td><td class="wrap">รวมผล sync เข้า mirror และบันทึกข้อผิดพลาดของการ sync</td></tr>
+    <tr><td><code class="fn">store.Store.Decide</code>, <code class="fn">store.Store.Undecide</code>, <code class="fn">store.Store.AddRule</code>, <code class="fn">store.Store.DeleteRule</code></td><td class="wrap">การตัดสินใน Review inbox และกฎที่จำไว้</td></tr>
+    <tr><td><code class="fn">store.Store.Mark</code>, <code class="fn">store.Store.Unmark</code>, <code class="fn">store.Store.AddManual</code>, <code class="fn">store.Store.DeleteManual</code></td><td class="wrap">ยืนยันหรือ mark missed visit และ visit ที่บันทึกเอง</td></tr>
+    <tr><td><code class="fn">store.Store.AddJob</code>, <code class="fn">store.Store.UpdateJob</code>, <code class="fn">store.Store.DeleteJob</code></td><td class="wrap">ad-hoc job</td></tr>
+    <tr><td><code class="fn">store.Store.AddFinding</code>, <code class="fn">store.Store.UpdateFinding</code>, <code class="fn">store.Store.DeleteFinding</code></td><td class="wrap">finding; ลบแล้ว repeat ที่ชี้มาเสียลิงก์ และ incident ที่ผูกไว้เสียลิงก์</td></tr>
+    <tr><td><code class="fn">store.Store.AddIncident</code>, <code class="fn">store.Store.UpdateIncident</code>, <code class="fn">store.Store.DeleteIncident</code></td><td class="wrap">incident; Add ให้เลขอ้างอิง, Update บันทึกสิ่งที่เปลี่ยนและข้อความลง timeline และไม่ยอมให้แก้ timeline, เลขที่ หรือ site</td></tr>
+    <tr><td><code class="fn">store.Store.Users</code>, <code class="fn">store.Store.SaveUser</code>, <code class="fn">store.Store.DeleteUser</code>, <code class="fn">store.Store.SessionSecret</code></td><td class="wrap">บัญชีผู้ใช้ และกุญแจเซ็น cookie (สร้างครั้งแรกที่ใช้)</td></tr>
+    <tr><td><code class="fn">store.Store.Log</code>, <code class="fn">store.Store.LogFrom</code>, <code class="fn">store.Store.Audit</code></td><td class="wrap">เขียน activity ที่ไม่เปลี่ยนข้อมูล (sign in, ดาวน์โหลด) และอ่านรายการล่าสุด</td></tr>
+    <tr><td><code class="fn">store.Store.Export</code>, <code class="fn">store.Store.Restore</code></td><td class="wrap">ข้อมูลทั้งหมดเป็น JSON (ไม่รวมกุญแจ session) และแทนที่ด้วยไฟล์สำรองหลังตรวจทุกส่วน, sign out ทุกคน</td></tr>
+    <tr><td><code class="fn">store.Store.save</code>, <code class="fn">store.Store.write</code></td><td class="wrap">เขียนไฟล์แบบ atomic (temp file, fsync, rename, fsync โฟลเดอร์) แล้วเขียน activity ของการเปลี่ยนนั้น</td></tr>
+    <tr><td><code class="fn">store.state.normalize</code>, <code class="fn">store.state.tidyFindings</code>, <code class="fn">store.state.tidyIncidents</code>, <code class="fn">store.Store.cleanup</code></td><td class="wrap">ซ่อมสิ่งที่อ้างถึงข้อมูลที่ไม่มีแล้ว และทำให้เลขถัดไปมากกว่าเลขที่ใช้อยู่ทั้งหมด</td></tr>
+    <tr><td><code class="fn">store.ActivityLog.Append</code>, <code class="fn">store.ActivityLog.Recent</code>, <code class="fn">store.ActivityLog.Each</code></td><td class="wrap">activity log: เขียนต่อท้ายไฟล์ของวัน, อ่านล่าสุด, อ่านทั้งหมดสำหรับ CSV และลบไฟล์ที่เก่ากว่าระยะเก็บ</td></tr>
+  </tbody>
+</table></div>
+
+<h2 id="gcal">internal/gcal</h2>
+<div class="tbl"><table>
+  <thead><tr><th>ฟังก์ชัน</th><th>หน้าที่</th></tr></thead>
+  <tbody>
+    <tr><td><code class="fn">gcal.NewGoogle</code></td><td class="wrap">อ่าน key ของ service account และสร้าง client ที่ขอ token ด้วย JWT ที่เซ็นเอง</td></tr>
+    <tr><td><code class="fn">gcal.Google.List</code></td><td class="wrap">อ่าน events.list ทุกหน้า แบบเต็ม (timeMin) หรือแบบเฉพาะที่เปลี่ยน (syncToken) คืน token ใหม่</td></tr>
+    <tr><td><code class="fn">gcal.Syncer.Run</code>, <code class="fn">gcal.Syncer.SyncAll</code>, <code class="fn">gcal.Syncer.TrySyncAll</code></td><td class="wrap">sync ทุกปฏิทินตามรอบ หรือทันที (Sync now ใช้ TrySyncAll ซึ่งข้ามถ้ามีรอบกำลังทำงาน)</td></tr>
+    <tr><td><code class="fn">gcal.Syncer.syncOne</code></td><td class="wrap">sync ปฏิทินเดียว พร้อมกู้คืนจาก 410 Gone ด้วยการอ่านใหม่ทั้งหมด</td></tr>
+  </tbody>
+</table></div>
+
+<h2 id="web">internal/web</h2>
+<div class="tbl"><table>
+  <thead><tr><th>ฟังก์ชัน</th><th>หน้าที่</th></tr></thead>
+  <tbody>
+    <tr><td><code class="fn">web.Server.Handler</code></td><td class="wrap">parse template, เตรียมระบบ sign in และลงทะเบียนทุก route พร้อมบทบาทที่ต้องการ</td></tr>
+    <tr><td><code class="fn">web.Server.parse</code>, <code class="fn">web.Server.parseHelp</code></td><td class="wrap">template ของทุกหน้า (layout + parts + หน้า) และหน้าคู่มือ</td></tr>
+    <tr><td><code class="fn">web.Server.authenticate</code>, <code class="fn">web.Server.need</code></td><td class="wrap">หา user, กัน cross-site POST, ใส่ security header; ตรวจบทบาทของ route</td></tr>
+    <tr><td><code class="fn">web.Server.login</code>, <code class="fn">web.Server.signIn</code>, <code class="fn">web.Server.failed</code></td><td class="wrap">sign in, สร้าง cookie, นับและล็อกการใส่รหัสผิด</td></tr>
+    <tr><td><code class="fn">web.Server.clientAddr</code></td><td class="wrap">ที่อยู่ของผู้ใช้จริง โดยเชื่อ X-Forwarded-For เฉพาะจาก trusted proxies</td></tr>
+    <tr><td><code class="fn">web.Server.snapshot</code>, <code class="fn">web.Server.render</code>, <code class="fn">web.Server.renderCode</code></td><td class="wrap">สร้าง snapshot และ render หน้า พร้อมข้อความ flash ที่ตรวจลายเซ็น</td></tr>
+    <tr><td><code class="fn">web.Server.redirect</code>, <code class="fn">web.Server.back</code></td><td class="wrap">redirect หลัง POST พร้อมข้อความที่เซ็นไว้ (back กลับไปหน้าที่มา เฉพาะ path ในเว็บเดียวกัน)</td></tr>
+    <tr><td><code class="fn">web.Server.overview</code>, <code class="fn">web.Server.sitePage</code>, <code class="fn">web.Server.taskPage</code></td><td class="wrap">หน้า Overview, site และ task</td></tr>
+    <tr><td><code class="fn">web.Server.inbox</code>, <code class="fn">web.Server.link</code>, <code class="fn">web.Server.ignore</code>, <code class="fn">web.Server.undo</code></td><td class="wrap">Review inbox: เชื่อม visit (และสร้างกฎ), ไม่ใช่ PM, ยกเลิกการตัดสิน</td></tr>
+    <tr><td><code class="fn">web.Server.mark</code>, <code class="fn">web.Server.unmark</code>, <code class="fn">web.Server.addManual</code></td><td class="wrap">ยืนยัน, mark missed, undo และบันทึก visit เอง</td></tr>
+    <tr><td><code class="fn">web.Server.incidentsPage</code>, <code class="fn">web.Server.addIncident</code>, <code class="fn">web.Server.editIncident</code>, <code class="fn">web.Server.noteIncident</code></td><td class="wrap">หน้า Incidents, บันทึก, แก้ (รวมกฎว่า admin เท่านั้นที่ยอมรับความเสี่ยงสูงได้) และเพิ่มข้อความใน timeline</td></tr>
+    <tr><td><code class="fn">web.Server.restore</code></td><td class="wrap">restore จากไฟล์ในรายการหรือไฟล์ที่อัปโหลด หลังบันทึกข้อมูลปัจจุบันเป็นไฟล์สำรองก่อน</td></tr>
+    <tr><td><code class="fn">web.csvCell</code></td><td class="wrap">กันข้อความที่ Excel จะตีความเป็นสูตร</td></tr>
+    <tr><td><code class="fn">web.Server.helpPageHandler</code>, <code class="fn">web.Server.helpSearch</code></td><td class="wrap">คู่มือนี้: render หน้า, สารบัญในหน้า และการค้นหา</td></tr>
+  </tbody>
+</table></div>
+
+<h2 id="others">auth, backup, notify, demo</h2>
+<div class="tbl"><table>
+  <thead><tr><th>ฟังก์ชัน</th><th>หน้าที่</th></tr></thead>
+  <tbody>
+    <tr><td><code class="fn">auth.Hash</code>, <code class="fn">auth.Verify</code></td><td class="wrap">hash รหัสผ่านด้วย PBKDF2-SHA256 (600,000 รอบ, salt สุ่ม) และตรวจแบบเวลาคงที่</td></tr>
+    <tr><td><code class="fn">auth.Sign</code>, <code class="fn">auth.Parse</code></td><td class="wrap">สร้างและตรวจ cookie session ที่เซ็นด้วย HMAC (มีวันหมดอายุและ epoch ของบัญชี)</td></tr>
+    <tr><td><code class="fn">auth.Limiter.Fail</code>, <code class="fn">auth.Limiter.Blocked</code></td><td class="wrap">นับการใส่รหัสผิดตาม username + ที่อยู่, ที่อยู่ และ username แล้วบอกว่าต้องรอนานเท่าไร</td></tr>
+    <tr><td><code class="fn">backup.Manager.Run</code>, <code class="fn">backup.Manager.Create</code>, <code class="fn">backup.Manager.Prune</code></td><td class="wrap">สำรองตามเวลา, สร้างไฟล์สำรอง .json.gz, ลบไฟล์ที่เก่ากว่าระยะเก็บ</td></tr>
+    <tr><td><code class="fn">backup.Decode</code></td><td class="wrap">อ่านไฟล์ที่อัปโหลด (.json.gz หรือ .json) โดยจำกัดขนาดหลังคลายบีบอัด</td></tr>
+    <tr><td><code class="fn">notify.Daily</code>, <code class="fn">notify.NextRun</code>, <code class="fn">notify.Telegram.Send</code></td><td class="wrap">ตั้งเวลารายวันตาม timezone และส่งข้อความ Telegram</td></tr>
+    <tr><td><code class="fn">demo.Catalog</code>, <code class="fn">demo.NewSource</code>, <code class="fn">demo.SeedFindings</code>, <code class="fn">demo.SeedIncidents</code></td><td class="wrap">ข้อมูล demo: 21 site, ปฏิทินปลอมที่สร้างนัดรอบวันนี้, finding และ incident ตัวอย่าง</td></tr>
+  </tbody>
+</table></div>
+{{end}}

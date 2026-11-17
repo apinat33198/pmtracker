@@ -1,0 +1,45 @@
+{{define "helpbody"}}
+<p>หน้าแรกของแอป (<a href="/">Overview</a>) แสดง PM ของทุก site ในหน้าเดียว เปิดหน้านี้ทุกเช้าแล้วไล่ดูของที่เป็นสีแดงและสีเหลืองก่อน</p>
+<figure>
+  <img src="{{asset "help/overview.webp"}}" alt="หน้า Overview: ตัวเลขตามสถานะ ตัวกรอง และตาราง site × system" width="1000" height="672" loading="lazy">
+  <figcaption>หน้า Overview จากข้อมูล demo</figcaption>
+</figure>
+
+<h2 id="counts">ตัวเลขตามสถานะ</h2>
+<p>แถวบนสุดคือจำนวน task ในแต่ละสถานะ (<span class="pill s-overdue">Overdue</span>, <span class="pill s-due_soon">Due soon, not booked</span>, <span class="pill s-off_cycle">Off-cycle</span>, <span class="pill s-no_history">No history</span>, <span class="pill s-booked">Booked</span>, <span class="pill s-on_track">On track</span>) <b>กดที่ตัวเลข</b>เพื่อกรองตาราง: ช่องที่ไม่ใช่สถานะนั้นจะจางลง กดซ้ำหรือกด <b class="ui">Clear filters</b> เพื่อดูทั้งหมด ความหมายของแต่ละสถานะอยู่ที่ <a href="/help/statuses">สถานะและการคำนวณรอบ PM</a></p>
+
+<h2 id="filters">ตัวกรอง</h2>
+<p>เลือก <b class="ui">Region</b>, <b class="ui">System</b> หรือ <b class="ui">Vendor</b> แล้วกด <b class="ui">Apply</b> ตัวกรองทำงานร่วมกับตัวเลขสถานะได้ เช่น ดูเฉพาะ CRAC ที่ Overdue ในภาคเหนือ ลิงก์ของหน้าเก็บตัวกรองไว้ จึงส่งลิงก์ให้คนอื่นเปิดเห็นแบบเดียวกันได้</p>
+
+<h2 id="grid">ตาราง site × system</h2>
+<ul>
+  <li><b>แถว</b>คือ site จัดกลุ่มตามภูมิภาค จุดสีหน้ารหัส site คือสถานะที่เร่งที่สุดของ site นั้น กดชื่อ site เพื่อเปิด<a href="/help/sites-tasks">หน้า site</a></li>
+  <li><b>Last PM</b> คือ PM ครั้งล่าสุดของ site (ระบบไหนก็ได้) และผ่านมากี่วันแล้ว</li>
+  <li><b>คอลัมน์</b>คือ system ช่องแต่ละช่องคือ PM ครั้งถัดไปของ system นั้นที่ site นั้น</li>
+  <li>ในช่องแสดง<b>วันนัด</b>ถ้ามีนัดแล้ว ไม่อย่างนั้นแสดง<b>วันครบกำหนด</b> พร้อมข้อความสั้น เช่น <i>in 23d</i> (อีก 23 วัน), <i>11d late</i> (เลยมา 11 วัน), <i>Booked</i> หรือ <i>Booked, off-cycle</i></li>
+  <li>สีของช่องคือสถานะของ task กดช่องเพื่อเปิด<a href="/help/sites-tasks#task">หน้า task</a> เอาเมาส์ชี้เพื่อดูชื่อ vendor และวันที่เต็ม</li>
+  <li>ช่องที่มีสองรายการ (เช่น UPS ที่ BKK2) คือมีสอง vendor ทำ system เดียวกันที่ site นั้น แต่ละรายการบอกชื่อ vendor ไว้</li>
+  <li>ขีด <i>—</i> แปลว่า site นั้นไม่มี task ของ system นั้น</li>
+</ul>
+<p class="tip">ถ้ามีแถบสีเหลืองว่า “past visits are waiting for someone to confirm it happened” แปลว่ามี visit ที่วันนัดผ่านไปแล้วแต่ยังไม่มีคนยืนยัน ระบบนับว่าทำแล้วไว้ก่อน เปิดหน้า site เพื่อกด <b class="ui">Confirm done</b> หรือ <b class="ui">Mark missed</b> (<a href="/help/visits">วิธียืนยัน</a>)</p>
+
+<h2 id="upcoming">Overdue and the next 30 days</h2>
+<p>รายการใต้ตาราง เรียงตามวันที่ต้องทำอะไรสักอย่าง (วันนัดถ้ามี ไม่อย่างนั้นวันครบกำหนด) มีทุก task ที่ Overdue และทุก task ที่ครบกำหนดหรือมีนัดภายใน 30 วัน ใช้เป็นรายการโทรตาม vendor ประจำสัปดาห์ได้</p>
+
+<h2 id="vendors">By vendor</h2>
+<p>สรุปต่อ vendor: ดูแลกี่ site กี่ task และมีกี่ task ที่ Overdue, Due soon หรือ Off-cycle กดชื่อ vendor เพื่อกรองตารางเหลือเฉพาะงานของ vendor นั้น มีเบอร์โทรให้กดโทรจากมือถือได้</p>
+
+<h2 id="jobs">Ad-hoc jobs</h2>
+<p>ถ้ามีงานครั้งเดียวที่ยังเปิดอยู่ จะแสดงท้ายหน้า (สูงสุด 8 รายการ) กด <b class="ui">All jobs</b> เพื่อดูทั้งหมด ดู <a href="/help/jobs">Ad-hoc jobs</a></p>
+
+<h2 id="export">Export CSV</h2>
+<p>ปุ่ม <b class="ui">Export CSV</b> มุมขวาบนดาวน์โหลดสถานะของทุก task พร้อม PM ล่าสุดและวันครบกำหนด เปิดใน Excel ได้ภาษาไทยไม่เพี้ยน คอลัมน์แรก ๆ ตรงกับรูปแบบไฟล์ import แก้ใน spreadsheet แล้ว import กลับได้ (<a href="/help/admin-import">Import และ export</a>)</p>
+
+<h2 id="routine">กิจวัตรที่แนะนำ</h2>
+<ol class="steps">
+  <li><b>ทุกเช้า:</b> ดูตัวเลข Overdue และ Due soon ตามงานกับ vendor ดู <a href="/inbox">Review inbox</a> ถ้ามีตัวเลข</li>
+  <li><b>หลังวันนัด:</b> ยืนยัน visit ที่หน้า site ภายในไม่กี่วัน หรือ Mark missed ถ้า vendor ไม่มา</li>
+  <li><b>ทุกสัปดาห์:</b> ดู Off-cycle แล้วขอให้ vendor เลื่อนนัดเข้าช่วงจอง</li>
+  <li><b>ทุกเดือน:</b> ดูหน้า <a href="/findings">Findings</a> และ <a href="/incidents">Incidents</a> ว่ามีอะไรค้างหรือเกิดซ้ำ</li>
+</ol>
+{{end}}

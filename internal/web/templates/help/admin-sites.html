@@ -1,0 +1,65 @@
+{{define "helpbody"}}
+<p>หน้านี้สำหรับ <span class="role">admin</span> อธิบายการจัดการ site และ PM task ที่ <a href="/admin/sites">Admin › Sites and tasks</a> ถ้าจะตั้งหลาย site พร้อมกัน ใช้ <a href="/help/admin-import">Import</a> จะเร็วกว่า</p>
+
+<h2 id="list">รายการ site</h2>
+<p>ตารางแสดงทุก site ที่ใช้งานอยู่: รหัส ชื่อ ภูมิภาค ชื่ออื่น จำนวน task และสถานะที่เร่งที่สุด กด <b class="ui">Edit</b> เพื่อแก้ site ที่ archive แล้วอยู่ในตารางแยกด้านล่าง</p>
+
+<h2 id="add-site">เพิ่ม site</h2>
+<p>ฟอร์ม <b class="ui">Add a site</b> ท้ายหน้ารายการ:</p>
+<ol class="steps">
+  <li><b class="ui">Code</b>: รหัสสั้นที่ vendor ใช้ในชื่อนัด เช่น <code>BKK1</code> ต้องไม่ซ้ำกับ site อื่น</li>
+  <li><b class="ui">Name</b> และ <b class="ui">Region</b>: ภูมิภาคใช้จัดกลุ่มแถวในหน้า Overview และเป็นตัวกรอง</li>
+  <li><b class="ui">Other names</b>: ชื่ออื่นที่อาจอยู่ในชื่อนัด คั่นด้วยจุลภาค ใช้ภาษาไทยได้ เช่น <code>บางนา, Bang Na DC</code></li>
+  <li><b class="ui">PM tasks</b>: ทุก system มีหนึ่งแถว เลือก vendor ของ system ที่ site นี้มี (เว้นว่าง = ไม่มี) และใส่วัน PM ล่าสุดถ้ารู้ เพื่อให้คำนวณวันครบกำหนดได้ทันที vendor ใหม่เลือก <b class="ui">Add a new vendor…</b> แล้วพิมพ์ชื่อ</li>
+  <li>กด <b class="ui">Add site</b></li>
+</ol>
+<p class="tip">system เดียวกันที่มีสอง vendor (เช่น UPS สองห้อง) ให้เพิ่ม vendor ที่สองจากหน้า site หลังบันทึก ถ้าไม่มี system ที่ต้องการในรายการ เพิ่มที่ <a href="/admin/systems">Systems</a> ก่อน</p>
+
+<h2 id="site-fields">แก้ site</h2>
+<ul>
+  <li><b class="ui">Code</b>: เปลี่ยนรหัสได้ รหัสเดิมจะถูกเก็บเป็นชื่ออื่นให้อัตโนมัติ นัดที่ใช้รหัสเก่าจึงยังจับคู่ได้</li>
+  <li><b class="ui">Other names</b>: ระบบหาคำเหล่านี้ในชื่อนัดและสถานที่ (location) ของนัด ถ้านัดของ site นี้ไปค้างใน Review inbox บ่อย ให้เพิ่มคำที่ vendor ใช้ไว้ที่นี่</li>
+  <li><b class="ui">Notes</b>: หมายเหตุของ site</li>
+</ul>
+
+<h2 id="add-task">เพิ่ม PM task</h2>
+<p>ในหน้าแก้ site ที่ <b class="ui">Add a PM task</b>:</p>
+<div class="tbl"><table>
+  <thead><tr><th>ช่อง</th><th>ความหมาย</th></tr></thead>
+  <tbody>
+    <tr><td>System, Vendor</td><td class="wrap">อุปกรณ์และผู้ทำ PM</td></tr>
+    <tr><td>Every … months</td><td class="wrap">รอบ PM ค่าเริ่มต้น {{.Cfg.Defaults.IntervalMonths}} เดือน ใช้ 1, 6 หรือ 12 ได้</td></tr>
+    <tr><td>Last PM date</td><td class="wrap">วัน PM ล่าสุด (ไม่บังคับ) ระบบบันทึกเป็น visit ที่ทำแล้วในวันนั้น</td></tr>
+    <tr><td>Cycle</td><td class="wrap"><b>From the last visit</b>: นับรอบจาก PM ครั้งล่าสุด หรือ <b>Fixed contract slots</b>: ใช้วันตามสัญญาตายตัว (<a href="/help/statuses#next-due">ต่างกันอย่างไร</a>)</td></tr>
+    <tr><td>First slot date</td><td class="wrap">สำหรับ Fixed contract slots คือวัน PM แรกตามสัญญา (จำเป็น) สำหรับ From the last visit คือวันครบกำหนดแรกเมื่อยังไม่มีประวัติ</td></tr>
+    <tr><td>Notes</td><td class="wrap">แสดงในหน้า task เช่น <i>New UPS room, level 3</i></td></tr>
+  </tbody>
+</table></div>
+
+<h2 id="edit-task">แก้ PM task</h2>
+<p>กด <b class="ui">Edit</b> ในตาราง task ของ site (หรือ <b class="ui">Edit task</b> ในหน้า task) นอกจากช่องข้างบน ยังตั้งค่าเฉพาะ task นี้ได้:</p>
+<ul>
+  <li><b class="ui">Booking window ± … days</b>: นัดที่ห่างวันครบกำหนดไม่เกินนี้นับว่าตรงรอบ (ค่าเริ่มต้น {{.Cfg.Defaults.WindowDays}})</li>
+  <li><b class="ui">Remind … days before due</b>: เริ่มเตือน Due soon ล่วงหน้ากี่วัน (ค่าเริ่มต้น {{.Cfg.Defaults.LeadDays}})</li>
+  <li><b class="ui">Overdue after … days</b>: ช่วงผ่อนผันหลังวันครบกำหนดก่อนเป็น Overdue (ค่าเริ่มต้น {{.Cfg.Defaults.GraceDays}})</li>
+  <li><b class="ui">Paused</b>: หยุดคำนวณและเตือน ใช้เมื่ออุปกรณ์เลิกใช้ชั่วคราวหรือสัญญาหมด ประวัติยังอยู่</li>
+</ul>
+<p>เปลี่ยน system หรือ vendor ของ task ได้โดยประวัติ visit ยังอยู่ ถ้าทั้ง vendor เปลี่ยนสัญญา ใช้การย้าย task ที่ <a href="/help/admin-vendors#move">Vendors</a> จะเร็วกว่า</p>
+<p><b class="ui">Set the last PM date</b> ในหน้าแก้ task บันทึก visit ที่ทำแล้วในวันที่เลือก ใช้เมื่อ visit นั้นไม่อยู่ในปฏิทิน</p>
+
+<h2 id="archive">Archive และ delete</h2>
+<div class="tbl"><table>
+  <thead><tr><th></th><th>Archive site</th><th>Delete site</th></tr></thead>
+  <tbody>
+    <tr><td>หน้า Overview</td><td class="wrap">หายไป</td><td class="wrap">หายไป</td></tr>
+    <tr><td>นัดใหม่</td><td class="wrap">ไม่จับคู่กับ site นี้</td><td class="wrap">ไม่จับคู่</td></tr>
+    <tr><td>ประวัติ</td><td class="wrap">เก็บไว้ทั้งหมด กด <b class="ui">Restore site</b> เพื่อเอากลับมา</td><td class="wrap">ลบ task, visit ที่บันทึกเอง, ad-hoc job และ finding ของ site นี้ ย้อนกลับไม่ได้ (นัดใน Google Calendar ไม่ถูกลบ)</td></tr>
+    <tr><td>ข้อจำกัด</td><td class="wrap">ไม่มี</td><td class="wrap">ต้องพิมพ์รหัส site เพื่อยืนยัน และ<b>ลบไม่ได้ถ้ามี incident</b> เพราะเป็นหลักฐาน</td></tr>
+  </tbody>
+</table></div>
+<p>ในเกือบทุกกรณีให้ใช้ <b>archive</b> ลบเฉพาะ site ที่สร้างผิด</p>
+
+<h2 id="delete-task">ลบ task</h2>
+<p><b class="ui">Delete task</b> ลบ visit ที่บันทึกเองของ task นั้นด้วย นัดในปฏิทินยังอยู่และเชื่อมใหม่ได้ finding และ incident ที่ผูกกับ task ยังอยู่ที่ site เดิม ถ้าต้องการเก็บประวัติไว้ ให้ <b>pause</b> แทนการลบ</p>
+<p class="tip">ทุกการเปลี่ยนแปลงในหน้านี้ถูกบันทึกใน <a href="/help/admin-users#activity">activity log</a> ว่าใครเปลี่ยนอะไรเมื่อไร</p>
+{{end}}

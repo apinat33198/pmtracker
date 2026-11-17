@@ -1,0 +1,48 @@
+{{define "helpbody"}}
+<p>กดชื่อ site ในหน้า Overview เพื่อเปิด<b>หน้า site</b> และกดช่องในตารางเพื่อเปิด<b>หน้า task</b> ของ system นั้น สองหน้านี้มีประวัติและรายละเอียดทั้งหมด</p>
+
+<h2 id="site">หน้า site</h2>
+<figure>
+  <img src="{{asset "help/site.webp"}}" alt="หน้า site: สถานะรวม ตาราง task และ timeline" width="1000" height="344" loading="lazy">
+  <figcaption>หน้า site ของ BKK1 จากข้อมูล demo</figcaption>
+</figure>
+<ul>
+  <li><b>หัวหน้า:</b> รหัส ชื่อ ภูมิภาค จำนวน task และ PM ครั้งล่าสุดของ site กล่องด้านขวาบอกสถานะที่เร่งที่สุดและจำนวน task ในแต่ละสถานะ</li>
+  <li><b>ตาราง task:</b> หนึ่งแถวต่อหนึ่ง task มี <b class="ui">Status</b>, <b class="ui">System</b> (กับ vendor และรอบ), <b class="ui">Last PM</b>, <b class="ui">Next due</b> และ <b class="ui">Booked</b> (บอกว่านัดห่างจากวันครบกำหนดกี่วัน) กดชื่อ system เพื่อเปิดหน้า task</li>
+  <li><b>Timeline:</b> แถบเล็กท้ายแถวแสดงช่วงเวลารอบวันนี้ ความหมายของสัญลักษณ์อยู่ที่ <a href="#timeline">Timeline</a> ด้านล่าง</li>
+  <li><b>Vendors at this site:</b> ผู้ติดต่อ เบอร์โทร และอีเมลของทุก vendor ที่ site นี้ กดเบอร์เพื่อโทรจากมือถือได้</li>
+  <li><b>Findings</b> และ <b>Incidents:</b> รายการที่ยังเปิดอยู่ของ site นี้ มีลิงก์ไปดูทั้งหมด (<a href="/help/findings">Findings</a>, <a href="/help/incidents">Incidents</a>)</li>
+  <li><b>Ad-hoc jobs:</b> งานครั้งเดียวที่ site นี้ พร้อมฟอร์มเพิ่มงาน (<a href="/help/jobs">Ad-hoc jobs</a>)</li>
+  <li><b>Record a PM visit</b> <span class="role">editor</span>: บันทึก visit ที่ไม่อยู่ในปฏิทิน ติ๊กได้หลาย system ถ้า vendor ทำหลายระบบในครั้งเดียว ดู <a href="/help/visits#manual">บันทึก visit เอง</a></li>
+  <li><b>Recent visits:</b> visit ล่าสุด 40 ครั้งของทุก task ที่ site นี้ พร้อมปุ่มยืนยัน (<a href="/help/visits">ยืนยันและบันทึก visit</a>)</li>
+</ul>
+{{if .IsAdmin}}<p>Admin เห็นลิงก์ <b class="ui">Edit site and tasks</b> ด้านบน สำหรับแก้ site และ task (<a href="/help/admin-sites">Sites และ PM tasks</a>)</p>{{end}}
+
+<h2 id="task">หน้า task</h2>
+<figure>
+  <img src="{{asset "help/task.webp"}}" alt="หน้า task: Last PM, Next due, Booking window, Booked, Cycle และ timeline 24 เดือน" width="1000" height="375" loading="lazy">
+  <figcaption>หน้า task ของ DC power ที่ BKK1</figcaption>
+</figure>
+<p>บรรทัดใต้ชื่อบอก vendor และช่องทางติดต่อ กล่องด้านขวาบอกสถานะและสิ่งที่ควรทำ (ข้อความภาษาอังกฤษจากระบบ) จากนั้นเป็นตัวเลขห้าช่อง:</p>
+<div class="tbl"><table>
+  <thead><tr><th>ช่อง</th><th>ความหมาย</th></tr></thead>
+  <tbody>
+    <tr><td>Last PM</td><td class="wrap">PM ครั้งล่าสุดที่นับว่าทำแล้ว และสถานะของ visit นั้น (Done หรือ Done, unconfirmed)</td></tr>
+    <tr><td>Next due</td><td class="wrap">วันครบกำหนดครั้งถัดไป และอีกกี่วัน (หรือเลยมากี่วัน)</td></tr>
+    <tr><td>Booking window</td><td class="wrap">ช่วงที่นัดแล้วนับว่าตรงรอบ คือวันครบกำหนด ± จำนวนวันของ task</td></tr>
+    <tr><td>Booked</td><td class="wrap">วันนัดครั้งถัดไป และห่างจากวันครบกำหนดกี่วัน</td></tr>
+    <tr><td>Cycle</td><td class="wrap">รอบ PM และวิธีนับ: <i>Counted from the last visit</i> หรือ <i>Fixed contract slots from …</i></td></tr>
+  </tbody>
+</table></div>
+<p>ถ้าวันครบกำหนดตรงกับวันหยุด จะมีแถบเหลืองแนะนำวันทำงานที่ใกล้ที่สุดให้เสนอ vendor ใต้ timeline มีรายการ findings และ incidents ของ system นี้ visit ทั้งหมด และฟอร์ม <b class="ui">Record a past visit</b> สำหรับประวัติจากเอกสารกระดาษ</p>
+
+<h2 id="timeline">Timeline</h2>
+<p>หน้า task มี timeline ใหญ่ 12 เดือนย้อนหลังและ 12 เดือนข้างหน้า หน้า site มีแบบย่อ เอาเมาส์ชี้สัญลักษณ์เพื่อดูวันที่:</p>
+<ul>
+  <li><b>จุดทึบ</b>: visit ที่ทำแล้ว</li>
+  <li><b>เส้นประแนวตั้ง</b>: วันนี้</li>
+  <li><b>แถบสี</b>: ช่วงจอง และ<b>รูปข้าวหลามตัด</b>ในแถบคือวันครบกำหนด</li>
+  <li><b>วงกลมโปร่ง</b>: visit ที่นัดไว้</li>
+  <li><b>วงกลมเส้นประ</b>: วันครบกำหนดที่คาดไว้อีกสามรอบข้างหน้า (บรรทัดใต้ timeline บอกวันที่ไว้ด้วย)</li>
+</ul>
+{{end}}

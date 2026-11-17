@@ -1,0 +1,40 @@
+{{define "helpbody"}}
+<p>จัดการว่าใคร sign in ได้และทำอะไรได้ที่ <a href="/admin/users">Admin › Users</a> และดูว่าใครทำอะไรเมื่อไรที่ <a href="/admin/activity">Admin › Activity</a></p>
+
+<h2 id="first-admin">admin คนแรก</h2>
+<p>ตอนเริ่มระบบครั้งแรกที่ยังไม่มีบัญชี เซิร์ฟเวอร์พิมพ์ลิงก์ใช้ครั้งเดียวลง log:</p>
+<pre><code>No accounts yet. Create the first admin at https://pm.example.com/setup?token=…</code></pre>
+<p>ดูได้ด้วย <code>journalctl -u pmtracker | grep setup</code> เปิดลิงก์ ตั้ง username และรหัสผ่าน แล้วจะ sign in เป็น admin คนแรก ลิงก์ใช้ไม่ได้อีกเมื่อมีบัญชีแล้ว (รีสตาร์ตก่อนสร้างจะได้ลิงก์ใหม่)</p>
+
+<h2 id="users">เพิ่มและจัดการผู้ใช้</h2>
+<ul>
+  <li><b class="ui">Add a user</b>: username, บทบาท และรหัสผ่านเริ่มต้น (อย่างน้อย 10 ตัวอักษร) แจ้งรหัสให้เจ้าของบัญชี และให้เขาเปลี่ยนเองที่ Your account</li>
+  <li><b class="ui">Change</b>: เปลี่ยนบทบาท (<a href="/help/start#roles">แต่ละบทบาททำอะไรได้</a>)</li>
+  <li><b class="ui">Password or delete</b> → <b class="ui">Set password</b>: ตั้งรหัสใหม่ให้คนที่ลืม เขาจะถูก sign out ทุกเครื่อง</li>
+  <li><b class="ui">Delete</b>: ลบบัญชี session ของบัญชีนั้นหมดอายุทันที</li>
+  <li>admin คนสุดท้ายลดบทบาทหรือลบไม่ได้ และลบบัญชีตัวเองไม่ได้</li>
+</ul>
+<p class="tip">หนึ่งคนหนึ่งบัญชีเสมอ บัญชีร่วมทำให้ activity log บอกไม่ได้ว่าใครทำอะไร ซึ่ง ISO 27001 ต้องการ</p>
+
+<h2 id="break-glass">บัญชีสำรองใน config</h2>
+<p>admin กำหนดบัญชีใน <code>auth.users</code> ของไฟล์ config ได้ บัญชีนี้แก้จากเว็บไม่ได้ จึงยังใช้ได้แม้บัญชีในข้อมูลหาย (break-glass) ใส่รหัสผ่านเป็น hash จากคำสั่ง <code>pmtracker hash-password</code> ไม่ใส่รหัสตรง ๆ หน้า Users จะเตือนถ้ายังมีรหัสแบบข้อความธรรมดา</p>
+<p><b>ล็อกตัวเองออก?</b> เพิ่มบัญชีใน <code>auth.users</code> ด้วย hash แล้วรีสตาร์ต sign in ด้วยบัญชีนั้น แล้วตั้งรหัสใหม่ให้บัญชีของคุณที่ Admin › Users</p>
+
+<h2 id="activity">Activity log</h2>
+<p>บันทึกว่าใครทำอะไรเมื่อไร และสำหรับการ sign in มาจาก IP ไหน:</p>
+<ul>
+  <li>sign in, sign out, ใส่รหัสผิด (ของบัญชีที่มีอยู่จริง) และการถูกล็อก</li>
+  <li>การเปลี่ยนบัญชีผู้ใช้</li>
+  <li>ทุกการเปลี่ยน site, task, vendor, system และปฏิทิน</li>
+  <li>การตัดสินใน Review inbox, การยืนยัน visit, job, finding และ incident</li>
+  <li>import, backup, restore และการดาวน์โหลด</li>
+</ul>
+<p>การเก็บรักษา:</p>
+<ul>
+  <li>เก็บ {{with .Cfg.Activity.KeepDays}}{{.}}{{end}} วัน (<code>activity.keep_days</code>) แล้วลบ ISO 27001 ข้อ A.8.15 ให้กำหนดตามนโยบายของบริษัท</li>
+  <li>เก็บแยกจากข้อมูลหลัก ไฟล์ละหนึ่งวัน เขียนต่อท้ายอย่างเดียว ไม่มีอะไรในเว็บแก้หรือลบได้ และการ restore ไม่เปลี่ยนมัน (การ restore เองถูกบันทึก)</li>
+  <li>มีสำเนาใน log ของเซิร์ฟเวอร์: <code>journalctl -u pmtracker | grep activity:</code> ตั้ง journald ให้เก็บได้ 90 วัน หรือส่งต่อไปเซิร์ฟเวอร์ log กลาง</li>
+  <li>หน้า Activity แสดง 500 รายการล่าสุด <b class="ui">Download all (CSV)</b> ดาวน์โหลดทั้งหมดที่เก็บไว้สำหรับ audit (การดาวน์โหลดก็ถูกบันทึก)</li>
+  <li>root บนเซิร์ฟเวอร์ยังลบไฟล์ได้ ถ้าต้องการ log ที่คนบนเซิร์ฟเวอร์แก้ไม่ได้ ให้ส่ง log ออกไปที่อื่นและเก็บ backup ของ container</li>
+</ul>
+{{end}}

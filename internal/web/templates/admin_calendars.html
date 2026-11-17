@@ -34,7 +34,7 @@
   <div class="row-actions"><button>Add calendar</button></div>
 </form>
 
-<h2>Learned rules</h2>
+<h2 id="rules">Learned rules</h2>
 {{if $d.Rules}}
 <table class="plain">
   <thead><tr><th scope="col">Rule</th><th scope="col">Matches</th><th scope="col">Links to</th><th scope="col"><span class="vh">Actions</span></th></tr></thead>
@@ -51,13 +51,13 @@
 </table>
 {{else}}<p class="hint">None yet. They're saved from the review inbox when a link should apply to a series or a title.</p>{{end}}
 
-<h2>Forecast feed</h2>
+<h2 id="feed">Forecast feed</h2>
 {{with $d.FeedURL}}
 <p class="hint">Subscribe in Google Calendar under Other calendars, From URL. It holds each task's next due date and three projected cycles. Google refreshes subscribed feeds on its own schedule, often hours apart.</p>
 <p><code class="copy">{{.}}</code></p>
 {{else}}<p class="hint">Off. Set <code>feed.token</code> in the config file to publish it.</p>{{end}}
 
-<h2>Daily digest</h2>
+<h2 id="digest">Daily digest</h2>
 <p class="hint">{{if .Cfg.Digest.Time}}Sent at {{.Cfg.Digest.Time}}{{if $d.Telegram}} to Telegram{{else}}, logged only (no Telegram chat configured){{end}}.{{else}}Off. Set <code>digest.time</code> in the config file to send it daily.{{end}} Today's would read:</p>
 <pre class="digest">{{if $d.Digest}}{{$d.Digest}}{{else}}Nothing needs attention today.{{end}}</pre>
 {{end}}

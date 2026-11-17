@@ -1,0 +1,75 @@
+{{define "helpbody"}}
+<p>config อยู่ในไฟล์ JSON (บนเซิร์ฟเวอร์คือ <code>/etc/pmtracker/config.json</code> ซึ่ง <code>install.sh</code> คัดลอกจาก <code>~/pmtracker/config.json</code> ให้แก้ไฟล์ในโฟลเดอร์ repo ไม่ใช่ใน /etc) key ที่สะกดผิดทำให้โปรแกรมไม่เริ่ม พร้อมบอกว่าผิดตรงไหน ค่าใน config ใช้ตอนเริ่มโปรแกรม แก้แล้วต้องรีสตาร์ต site, task, vendor, ปฏิทิน และผู้ใช้จัดการในหน้าเว็บ ไม่ใช่ใน config</p>
+
+<h2 id="server">เซิร์ฟเวอร์และข้อมูล</h2>
+<div class="tbl"><table>
+  <thead><tr><th>key</th><th>ค่าเริ่มต้น</th><th>ความหมาย</th></tr></thead>
+  <tbody>
+    <tr><td><code>timezone</code></td><td>Asia/Bangkok</td><td class="wrap">timezone ของทุกวันที่ในแอป</td></tr>
+    <tr><td><code>listen</code></td><td>:8080</td><td class="wrap">ที่อยู่ที่รอ request ถ้า cloudflared อยู่เครื่องเดียวกันใช้ <code>127.0.0.1:8080</code> ถ้าอยู่คนละเครื่องใช้ <code>0.0.0.0:8080</code> แล้วจำกัดด้วย firewall</td></tr>
+    <tr><td><code>public_url</code></td><td>(ว่าง)</td><td class="wrap">ที่อยู่ที่ผู้ใช้เปิด เช่น <code>https://pm.apin.at</code> ถ้าเป็น https จะเปิด Secure cookie, HSTS และไม่รับรหัสผ่านผ่าน HTTP จากเครื่องอื่น ใช้ในลิงก์ของ digest และลิงก์ setup</td></tr>
+    <tr><td><code>data_file</code></td><td>pmtracker-data.json</td><td class="wrap">ไฟล์ข้อมูล บนเซิร์ฟเวอร์ใช้ <code>/var/lib/pmtracker/data.json</code></td></tr>
+    <tr><td><code>trusted_proxies</code></td><td>127.0.0.1, ::1</td><td class="wrap">proxy ที่เชื่อ X-Forwarded-For ได้ ใส่ IP <b>ตรงตัว</b>ของเครื่อง cloudflared ถ้าไม่ได้อยู่เครื่องเดียวกัน ไม่อย่างนั้นการล็อกรหัสผิดจะนับทุกคนเป็นคนเดียว</td></tr>
+  </tbody>
+</table></div>
+
+<h2 id="calendar">ปฏิทินและรอบ PM</h2>
+<div class="tbl"><table>
+  <thead><tr><th>key</th><th>ค่าเริ่มต้น</th><th>ความหมาย</th></tr></thead>
+  <tbody>
+    <tr><td><code>google.credentials_file</code></td><td>(ว่าง)</td><td class="wrap">ไฟล์ key ของ service account ถ้าไม่มีไฟล์ โปรแกรมยังทำงานแต่ไม่ได้ต่อ Google</td></tr>
+    <tr><td><code>sync_interval_minutes</code></td><td>15</td><td class="wrap">รอบการอ่านปฏิทิน</td></tr>
+    <tr><td><code>sync_lookback_months</code></td><td>24</td><td class="wrap">อ่านย้อนหลังกี่เดือนตอน sync เต็ม ใช้ 36 ถ้า audit ต้องการประวัติ 3 ปี</td></tr>
+    <tr><td><code>calendars</code></td><td>[]</td><td class="wrap">ปฏิทินตั้งต้นตอนสร้างไฟล์ข้อมูลครั้งแรกเท่านั้น (<code>id</code>, <code>label</code>, <code>pm_only</code>) หลังจากนั้นจัดการในหน้าเว็บ</td></tr>
+    <tr><td><code>keywords</code></td><td>[]</td><td class="wrap">คำเพิ่มเติมที่บอกว่านัดเป็น PM เช่น <code>"MA visit"</code></td></tr>
+    <tr><td><code>holidays</code></td><td>[]</td><td class="wrap">วันหยุดแบบ <code>"2026-12-31"</code> ใช้แนะนำวันนัด เพิ่มวันหยุดราชการทุกปี</td></tr>
+    <tr><td><code>defaults.interval_months</code></td><td>3</td><td class="wrap">รอบ PM ของ task ใหม่</td></tr>
+    <tr><td><code>defaults.window_days</code></td><td>21</td><td class="wrap">ช่วงจอง ± วัน</td></tr>
+    <tr><td><code>defaults.lead_days</code></td><td>30</td><td class="wrap">เตือน Due soon ล่วงหน้ากี่วัน</td></tr>
+    <tr><td><code>defaults.grace_days</code></td><td>7</td><td class="wrap">ช่วงผ่อนผันก่อน Overdue</td></tr>
+  </tbody>
+</table></div>
+
+<h2 id="digest">Digest, ฟีด, backup และ activity</h2>
+<div class="tbl"><table>
+  <thead><tr><th>key</th><th>ค่าเริ่มต้น</th><th>ความหมาย</th></tr></thead>
+  <tbody>
+    <tr><td><code>digest.time</code></td><td>(ว่าง = ปิด)</td><td class="wrap">เวลาส่ง digest แบบ <code>"08:00"</code></td></tr>
+    <tr><td><code>digest.telegram_bot_token</code>, <code>digest.telegram_chat_id</code></td><td>(ว่าง)</td><td class="wrap">bot และ chat ที่ส่ง ถ้าว่าง digest เขียนลง log เท่านั้น ไฟล์ config ต้องอ่านได้เฉพาะ service</td></tr>
+    <tr><td><code>feed.token</code></td><td>(ว่าง = ปิด)</td><td class="wrap">token ของฟีด <code>/forecast.ics?token=…</code> อย่างน้อย 24 ตัวอักษร สร้างด้วย <code>openssl rand -hex 24</code> ใส่ค่าตัวอย่างโปรแกรมไม่เริ่ม</td></tr>
+    <tr><td><code>backup.time</code></td><td>02:30</td><td class="wrap">เวลาสำรองรายวัน หรือ <code>"off"</code></td></tr>
+    <tr><td><code>backup.keep_days</code></td><td>30</td><td class="wrap">เก็บไฟล์สำรองกี่วัน</td></tr>
+    <tr><td><code>backup.dir</code></td><td>backups ข้างไฟล์ข้อมูล</td><td class="wrap">โฟลเดอร์สำรอง ถ้าอยู่นอก /var/lib/pmtracker ต้องเพิ่ม ReadWritePaths ใน systemd unit</td></tr>
+    <tr><td><code>activity.keep_days</code></td><td>90</td><td class="wrap">เก็บ activity log กี่วัน (ตามนโยบาย ISO 27001 ของบริษัท)</td></tr>
+  </tbody>
+</table></div>
+
+<h2 id="auth">Sign in</h2>
+<div class="tbl"><table>
+  <thead><tr><th>key</th><th>ค่าเริ่มต้น</th><th>ความหมาย</th></tr></thead>
+  <tbody>
+    <tr><td><code>auth.anonymous_access</code></td><td>none</td><td class="wrap"><code>"none"</code> ทุกหน้าต้อง sign in หรือ <code>"viewer"</code> คนที่ยังไม่ sign in ดูได้อย่างเดียว ใช้ <code>"none"</code> กับเซิร์ฟเวอร์ที่เข้าถึงจากอินเทอร์เน็ต</td></tr>
+    <tr><td><code>auth.session_hours</code></td><td>12</td><td class="wrap">sign in อยู่ได้กี่ชั่วโมงถ้าไม่ติ๊ก Keep me signed in</td></tr>
+    <tr><td><code>auth.users</code></td><td>[]</td><td class="wrap">บัญชีสำรอง <code>{"username", "password", "role"}</code> ใส่ hash จาก <code>pmtracker hash-password</code></td></tr>
+  </tbody>
+</table></div>
+
+<h2 id="commands">คำสั่งและ flag</h2>
+<pre><code>pmtracker [-config file | -demo] [serve|check|sync|digest]
+pmtracker hash-password</code></pre>
+<div class="tbl"><table>
+  <thead><tr><th>คำสั่ง / flag</th><th>ทำอะไร</th></tr></thead>
+  <tbody>
+    <tr><td><code>serve</code> (ค่าเริ่มต้น)</td><td class="wrap">เปิดเว็บ พร้อม sync, backup และ digest ตามเวลา</td></tr>
+    <tr><td><code>check</code></td><td class="wrap">ตรวจ key และทุกปฏิทิน นับ event และผลการจับคู่ ไม่เขียนข้อมูล</td></tr>
+    <tr><td><code>sync</code></td><td class="wrap">sync ทุกปฏิทินหนึ่งรอบแล้วจบ</td></tr>
+    <tr><td><code>digest</code></td><td class="wrap">พิมพ์ข้อความ digest ของวันนี้</td></tr>
+    <tr><td><code>hash-password</code></td><td class="wrap">อ่านรหัสผ่าน (ไม่แสดงบนจอ) แล้วพิมพ์ hash</td></tr>
+    <tr><td><code>-config</code></td><td class="wrap">ไฟล์ config</td></tr>
+    <tr><td><code>-demo</code></td><td class="wrap">ใช้ข้อมูล demo ไม่ต้องมี Google (เริ่มใหม่ทุกครั้ง ยกเว้นใช้ <code>-keep</code>)</td></tr>
+    <tr><td><code>-keep</code></td><td class="wrap">demo: เก็บข้อมูลที่แก้ไว้ข้ามการรีสตาร์ต</td></tr>
+    <tr><td><code>-addr</code>, <code>-data</code></td><td class="wrap">แทนค่า <code>listen</code> และ <code>data_file</code></td></tr>
+    <tr><td><code>-today 2027-01-15</code></td><td class="wrap">สมมติว่าวันนี้เป็นวันอื่น สำหรับ demo และทดสอบ</td></tr>
+  </tbody>
+</table></div>
+{{end}}

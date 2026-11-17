@@ -1,0 +1,57 @@
+{{define "helpbody"}}
+<p>PM Tracker เป็น Go binary ตัวเดียว ใช้ standard library เท่านั้น (ไม่มี dependency ภายนอก, ไม่ใช้ CGO) เก็บข้อมูลในไฟล์ JSON ไฟล์เดียว และ render หน้าเว็บจากฝั่ง server ด้วย <code>html/template</code> JavaScript มีแค่ส่วนเล็ก ๆ ที่ช่วยเรื่องการใช้งาน ฟอร์มทุกฟอร์มทำงานได้แม้ปิด JavaScript</p>
+
+<h2 id="packages">Package</h2>
+<div class="tbl"><table>
+  <thead><tr><th>Package</th><th>หน้าที่</th></tr></thead>
+  <tbody>
+    <tr><td><code>cmd/pmtracker</code></td><td class="wrap">อ่าน flag, โหลด config, เปิด store, เชื่อมทุกส่วน, สร้างข้อมูลตั้งต้นครั้งแรก, รันงานเบื้องหลัง (sync, backup, digest) และคำสั่ง <code>check</code>, <code>sync</code>, <code>digest</code>, <code>hash-password</code></td></tr>
+    <tr><td><code>internal/config</code></td><td class="wrap">อ่านและตรวจ <code>config.json</code>, ค่าเริ่มต้น, timezone, วันหยุด, trusted proxies, บทบาท</td></tr>
+    <tr><td><code>internal/core</code></td><td class="wrap">โดเมนทั้งหมด ไม่มี I/O: catalog (site, system, vendor, task, calendar), matcher, forecaster, snapshot, job, finding, incident, ตัววัด, import CSV, digest, ฟีด ICS</td></tr>
+    <tr><td><code>internal/store</code></td><td class="wrap">ไฟล์ JSON: catalog, event ที่ mirror มา, การตัดสิน, กฎ, การยืนยัน visit, visit ที่บันทึกเอง, job, finding, incident, ผู้ใช้, กุญแจ session; activity log ในไฟล์รายวันแยก</td></tr>
+    <tr><td><code>internal/gcal</code></td><td class="wrap">client ของ Google Calendar (service account, JWT ที่เขียนเอง), อ่าน events.list ทีละหน้า, syncer ที่จัดการ sync token และ 410 Gone</td></tr>
+    <tr><td><code>internal/web</code></td><td class="wrap">HTTP server: route, sign in, บทบาท, ทุกหน้า, admin, CSV, template, CSS, คู่มือนี้</td></tr>
+    <tr><td><code>internal/auth</code></td><td class="wrap">hash รหัสผ่าน (PBKDF2-SHA256), cookie session ที่เซ็นด้วย HMAC, ตัวจำกัดการลองรหัสผิด</td></tr>
+    <tr><td><code>internal/backup</code></td><td class="wrap">สำรองรายวัน, ลบอันเก่า, อ่านไฟล์สำหรับ restore</td></tr>
+    <tr><td><code>internal/notify</code></td><td class="wrap">ส่ง Telegram และตัวตั้งเวลารายวัน</td></tr>
+    <tr><td><code>internal/demo</code></td><td class="wrap">ข้อมูล demo 21 site, ปฏิทินปลอม, job, finding และ incident ตัวอย่าง</td></tr>
+  </tbody>
+</table></div>
+<p>ทิศทางการพึ่งพา: <code>web</code> → <code>store</code>, <code>gcal</code>, <code>backup</code> → <code>core</code> → <code>config</code> ส่วน <code>core</code> ไม่รู้จัก HTTP หรือไฟล์ จึงเทสต์ได้ง่าย</p>
+
+<h2 id="request">เส้นทางของ request</h2>
+<ol class="steps">
+  <li><code class="fn">web.Server.authenticate</code> อ่าน cookie session (หรือ basic auth) หา user และใส่ไว้ใน context ตรวจ Origin และ Sec-Fetch-Site สำหรับ POST ใส่ security header</li>
+  <li><code class="fn">web.Server.need</code> ตรวจบทบาทของ route (viewer, editor, admin) ไม่พอได้ 403 ยังไม่ sign in ถูกพาไปหน้า login</li>
+  <li>handler เรียก <code class="fn">web.Server.snapshot</code> ซึ่งคือ <code class="fn">store.Store.Inputs</code> (สำเนาข้อมูลทั้งหมด) ส่งต่อให้ <code class="fn">core.Build</code></li>
+  <li><code class="fn">core.Build</code> คำนวณทุกอย่างใหม่ทุก request: จับคู่ทุก event ด้วย matcher, สร้าง visit, คำนวณ forecast ของทุก task, สรุปต่อ site และ vendor, inbox, job, finding, incident ไม่มี cache ข้อมูลจึงตรงกับไฟล์เสมอ</li>
+  <li><code class="fn">web.Server.renderCode</code> ใส่ข้อมูลลง <code>page</code> แล้ว render template ของหน้านั้นใน <code>layout.html</code></li>
+</ol>
+<p>การเปลี่ยนข้อมูล (POST) เรียก method ของ store เช่น <code class="fn">store.Store.UpdateCatalog</code> หรือ <code class="fn">store.Store.AddIncident</code> ซึ่งตรวจข้อมูล บันทึกไฟล์ และเขียน activity log จากนั้น redirect กลับพร้อมข้อความที่เซ็นไว้ (<code class="fn">web.Server.redirect</code>)</p>
+
+<h2 id="sync">การ sync ปฏิทิน</h2>
+<ol class="steps">
+  <li><code class="fn">gcal.Syncer.Run</code> เรียก <code class="fn">gcal.Syncer.TrySyncAll</code> ทันทีและทุก <code>sync_interval_minutes</code> (ข้ามรอบถ้ายังทำรอบก่อนไม่เสร็จ)</li>
+  <li>แต่ละปฏิทิน <code class="fn">gcal.Syncer.syncOne</code> เรียก <code class="fn">gcal.Google.List</code> ด้วย sync token เดิม (อ่านเฉพาะที่เปลี่ยน) ถ้ายังไม่มี token อ่านทั้งหมดตั้งแต่ <code>sync_lookback_months</code> ถ้า Google ตอบ 410 Gone อ่านทั้งหมดใหม่</li>
+  <li><code class="fn">store.Store.ApplySync</code> รวม event เข้า mirror: event ที่ถูกยกเลิกเก็บไว้แต่ mark cancelled, การเลื่อนวันบันทึกเป็น change, sync เต็มลบ event ที่หายไป sync ที่ไม่มีอะไรเปลี่ยนไม่เขียนไฟล์</li>
+  <li>ไม่มีการเก็บผลการจับคู่ไว้ request ถัดไปจะจับคู่ใหม่จาก mirror ทันที</li>
+</ol>
+
+<h2 id="background">งานเบื้องหลัง</h2>
+<ul>
+  <li><b>sync</b>: goroutine ของ <code class="fn">gcal.Syncer.Run</code></li>
+  <li><b>backup</b>: <code class="fn">backup.Manager.Run</code> สำรองตามเวลาที่ตั้ง ลบไฟล์เก่า และสำรองที่พลาดไปตอนเริ่มทำงาน</li>
+  <li><b>digest</b>: <code class="fn">notify.Daily</code> เรียก <code class="fn">core.Digest</code> แล้วส่งด้วย <code class="fn">notify.Telegram.Send</code></li>
+  <li>ทั้งหมดหยุดเมื่อได้ SIGTERM ผ่าน context เดียวกับ HTTP server</li>
+</ul>
+
+<h2 id="principles">หลักการออกแบบ</h2>
+<ul>
+  <li><b>สถานะทั้งหมดคำนวณใหม่</b> จากข้อมูลดิบทุกครั้ง (event, การตัดสิน, การยืนยัน, catalog) ไม่มีสถานะที่เก็บไว้แล้วอาจไม่ตรง</li>
+  <li><b>อ่านปฏิทินอย่างเดียว</b> ไม่เขียนกลับ Google</li>
+  <li><b>ตรวจข้อมูลใน core</b>: ทุก record มี <code>Clean()</code> ที่จัดข้อความและตรวจค่า ใช้ทั้งตอนบันทึกและตอน restore</li>
+  <li><b>ทุกการเปลี่ยนแปลงมี activity</b>: method ของ store รับข้อความ action และเขียนลง activity log หลังบันทึกไฟล์สำเร็จ</li>
+  <li><b>job, finding และ incident ไม่แตะสถานะ PM</b> แยกจาก forecast โดยสิ้นเชิง</li>
+  <li><b>ข้อความในแอปเป็นภาษาอังกฤษเรียบง่าย</b> บอกว่าเกิดอะไรและต้องทำอะไรต่อ ข้อความ error บอกวิธีแก้</li>
+</ul>
+{{end}}

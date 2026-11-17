@@ -1,0 +1,72 @@
+{{define "helpbody"}}
+<p>PM Tracker ใช้งานจริงใน Proxmox container (Debian LXC แบบ unprivileged) ผู้ใช้เข้าผ่าน Cloudflare Tunnel ที่ <code>pm.apin.at</code> ส่วนเครื่อง Mac ใช้พัฒนาเท่านั้น</p>
+
+<h2 id="container">Container</h2>
+<ul>
+  <li>Debian 12 หรือ 13, 1 core, RAM 512 MB, ดิสก์ 4 GB</li>
+  <li>เปิด <b>Options → Features → Nesting</b> ไม่อย่างนั้น sandbox ของ systemd ทำงานไม่ได้และ service ล้มด้วย <code>status=226/NAMESPACE</code></li>
+  <li>นาฬิกามาจาก Proxmox host จึงต้องเปิด NTP บน host (เวลาใน activity log ขึ้นกับมัน)</li>
+  <li>ให้ container มี IP คงที่ และตั้ง Proxmox firewall ให้เข้าพอร์ต 8080 ได้เฉพาะจากเครื่อง cloudflared</li>
+</ul>
+
+<h2 id="install">ติดตั้งและอัปเดต</h2>
+<p>ใน container (root):</p>
+<pre><code>apt install -y git
+git clone https://github.com/apinat33198/pmtracker &amp;&amp; cd pmtracker
+deploy/install.sh pm.apin.at</code></pre>
+<p><code>install.sh</code> ติดตั้ง Go รุ่นที่ยังได้รับ security fix ถ้ายังไม่มี (ตรวจ checksum), สร้าง <code>config.json</code> ครั้งแรก, build, ติดตั้ง systemd service, ตั้ง Cloudflare Tunnel ถ้าต้องการ (ตอบ n ถ้าใช้ cloudflared ที่มีอยู่แล้ว) และพิมพ์ลิงก์สร้าง admin คนแรก วาง <code>service-account.json</code> ไว้ในโฟลเดอร์ก่อนถ้ามี</p>
+<p><b>อัปเดต:</b></p>
+<pre><code>cd ~/pmtracker &amp;&amp; git pull &amp;&amp; deploy/install.sh pm.apin.at</code></pre>
+<p>สคริปต์บันทึก <code>data.json.before-update</code> ก่อนรีสตาร์ต แก้ config ที่ <code>~/pmtracker/config.json</code> เสมอ เพราะ install.sh เขียนทับ <code>/etc/pmtracker/config.json</code></p>
+<p><b>จาก Mac:</b> <code>deploy/install.sh root@&lt;IP&gt; pm.apin.at</code> ทำแบบเดียวกันผ่าน SSH ส่วน <code>deploy/push.sh root@&lt;container&gt;</code> รันเทสต์ build บน Mac คัดลอก binary สำรองไฟล์ข้อมูล และรีสตาร์ต (ต้องใส่ SSH key ของ Mac ใน container ก่อน เพราะ Debian ไม่รับรหัสผ่าน root ผ่าน SSH)</p>
+
+<h2 id="branch">ลอง branch ก่อน merge</h2>
+<pre><code>cd ~/pmtracker &amp;&amp; git fetch &amp;&amp; git checkout help
+deploy/install.sh pm.apin.at</code></pre>
+<p class="warn-box">branch ที่เพิ่มชนิดข้อมูลใหม่ (เช่น incidents) ใช้ไฟล์ข้อมูลเวอร์ชันใหม่ ถ้าถอยกลับไป main หลังบันทึกข้อมูลชนิดนั้นแล้ว ข้อมูลส่วนนั้นจะหายเมื่อ main บันทึกครั้งถัดไป และ main ไม่รับไฟล์สำรองจาก branch นั้น เก็บ <code>data.json.before-update</code> หรือกด Back up now ก่อนลอง</p>
+<p>ลองบนเครื่องตัวเองก่อนได้เสมอโดยไม่แตะข้อมูลจริง: <code>go run ./cmd/pmtracker -demo</code></p>
+
+<h2 id="tunnel">Cloudflare Tunnel</h2>
+<ul>
+  <li><b>cloudflared อยู่เครื่องอื่น</b> (แบบที่ใช้อยู่): ตั้ง <code>"listen": "0.0.0.0:8080"</code>, ใส่ IP ของเครื่อง cloudflared ใน <code>trusted_proxies</code>, ตั้ง route <code>pm.apin.at → http://&lt;IP ของ container&gt;:8080</code> และ firewall ให้พอร์ต 8080 รับเฉพาะเครื่องนั้น</li>
+  <li><b>cloudflared อยู่ใน container เดียวกัน</b>: <code>"listen": "127.0.0.1:8080"</code> และ route ไป <code>http://127.0.0.1:8080</code> (ไม่ใช้ <code>localhost</code> ซึ่งอาจไปที่ IPv6 ก่อน) <code>trusted_proxies</code> ใช้ค่าเริ่มต้นได้</li>
+  <li>แนะนำให้ใส่ Cloudflare Access หน้า <code>pm.apin.at</code> (อีเมลบริษัท, one-time PIN หรือ Google) เป็นชั้นตรวจที่สองก่อนถึงการ sign in ของแอป ถ้าใช้ฟีด .ics ให้ทำ Access application แยกสำหรับ path <code>forecast.ics</code> แบบ Bypass</li>
+</ul>
+
+<h2 id="logs">Log และสถานะ</h2>
+<pre><code>systemctl status pmtracker
+journalctl -u pmtracker -f                  # log สด
+journalctl -u pmtracker | grep setup        # ลิงก์สร้าง admin คนแรก
+journalctl -u pmtracker | grep activity:    # สำเนา activity log
+curl -s http://127.0.0.1:8080/healthz       # ok</code></pre>
+
+<h2 id="backups-offsite">ไฟล์สำรองนอกเครื่อง</h2>
+<ol class="steps">
+  <li>เพิ่ม mount point ของ share บน NAS ให้ container ใน Proxmox เช่น <code>/mnt/pm-backups</code></li>
+  <li>ตั้ง <code>"backup": {"dir": "/mnt/pm-backups"}</code> ใน <code>~/pmtracker/config.json</code></li>
+  <li>อนุญาตให้ service เขียนที่นั่น: <code>systemctl edit pmtracker</code> แล้วใส่
+<pre><code>[Service]
+ReadWritePaths=/mnt/pm-backups</code></pre></li>
+  <li>รัน install.sh ใหม่ แล้วกด Back up now ที่ Admin › Backups เพื่อทดสอบ</li>
+  <li>เพิ่ม backup job ของ container ใน Proxmox Backup Server ด้วย</li>
+</ol>
+
+<h2 id="docker">Docker</h2>
+<pre><code>docker build -t pmtracker .
+docker run -v $PWD/config:/config -v pmdata:/data -p 8080:8080 pmtracker</code></pre>
+<p>mount config ที่ <code>/config</code> และ volume ข้อมูลที่ <code>/data</code> ถ้ามี proxy บน Docker network ให้ใส่ช่วง bridge เช่น <code>172.16.0.0/12</code> ใน <code>trusted_proxies</code></p>
+
+<h2 id="troubleshooting">ปัญหาที่พบบ่อย</h2>
+<div class="tbl"><table>
+  <thead><tr><th>อาการ</th><th>สาเหตุและวิธีแก้</th></tr></thead>
+  <tbody>
+    <tr><td>service ล้ม <code>226/NAMESPACE</code></td><td class="wrap">container ไม่ได้เปิด Nesting เปิดแล้วรีสตาร์ต container</td></tr>
+    <tr><td>ขึ้นว่า Google Calendar isn't connected</td><td class="wrap">ไม่มีไฟล์ key ที่ <code>google.credentials_file</code> วาง <code>service-account.json</code> ในโฟลเดอร์ repo แล้วรัน install.sh ใหม่</td></tr>
+    <tr><td>ปฏิทินขึ้น error 403 หรือ 404</td><td class="wrap">ยังไม่ได้แชร์ปฏิทินให้อีเมล service account หรือ Calendar ID ผิด รัน <code>pmtracker -config /etc/pmtracker/config.json check</code></td></tr>
+    <tr><td>ไม่เริ่ม: config error</td><td class="wrap">key สะกดผิด, ค่าไม่ถูกรูปแบบ หรือ <code>feed.token</code> เป็นค่าตัวอย่างหรือสั้นกว่า 24 ตัวอักษร ข้อความ error บอกทุกข้อ</td></tr>
+    <tr><td>ใส่รหัสผ่านแล้วถูกพาไปหน้า HTTPS</td><td class="wrap">เปิดด้วย IP ในวง LAN ผ่าน HTTP ระบบไม่รับรหัสผ่านแบบนั้น ใช้ <code>{{with .Cfg.PublicURL}}{{.}}{{else}}https://pm.apin.at{{end}}</code></td></tr>
+    <tr><td>ทุกคนถูกล็อกพร้อมกัน</td><td class="wrap"><code>trusted_proxies</code> ไม่มี IP ของ cloudflared ระบบเห็นทุกคนเป็นที่อยู่เดียวกัน ใส่ IP ตรงตัว (server เตือนใน log ถ้าใส่เป็นช่วง)</td></tr>
+    <tr><td>ลิงก์ setup ใช้ไม่ได้</td><td class="wrap">token เปลี่ยนทุกครั้งที่รีสตาร์ตจนกว่าจะมี admin คนแรก ดูลิงก์ล่าสุดใน journalctl</td></tr>
+  </tbody>
+</table></div>
+{{end}}

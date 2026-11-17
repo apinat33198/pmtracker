@@ -31,7 +31,7 @@ import (
 	"github.com/apinat33198/pmtracker/internal/store"
 )
 
-//go:embed templates/*.html
+//go:embed templates/*.html templates/help/*.html
 var templateFS embed.FS
 
 //go:embed static
@@ -54,6 +54,9 @@ type Server struct {
 	setupMu    sync.Mutex
 	dummyHash  string
 	dummyOnce  sync.Once
+	help       map[string]*template.Template // the manual's pages, by slug
+	helpOnce   sync.Once
+	helpText   map[string]string // the manual's text, for search
 }
 
 func (s *Server) Handler() (http.Handler, error) {
@@ -103,6 +106,9 @@ func (s *Server) Handler() (http.Handler, error) {
 	handle("GET /incidents.csv", v, s.incidentsCSV)
 	handle("GET /incidents/new", e, s.newIncident)
 	handle("GET /incidents/{id}", v, s.incidentPage)
+	handle("GET /help", v, s.helpIndex)
+	handle("GET /help/search", v, s.helpSearch)
+	handle("GET /help/{slug}", v, s.helpPageHandler)
 	handle("GET /export.csv", v, s.exportCSV)
 	handle("GET /digest.txt", v, s.digestText)
 	handle("GET /account", v, s.accountPage)
@@ -217,9 +223,14 @@ func (s *Server) parse() error {
 		"impactScale":        func() []core.Level { return core.ImpactScale },
 		"riskBands":          func() []core.RiskBand { return core.RiskBands },
 		"riskOf":             core.RiskOf,
-		"minutes":            minutesText,
-		"spaceT":             spaceT,
-		"lower":              strings.ToLower,
+		"likelihoodDown": func() []core.Level { // 5 at the top, as in the risk matrix
+			out := append([]core.Level(nil), core.LikelihoodScale...)
+			slices.Reverse(out)
+			return out
+		},
+		"minutes": minutesText,
+		"spaceT":  spaceT,
+		"lower":   strings.ToLower,
 		"pct": func(n int) string {
 			if n < 0 {
 				return "–"
@@ -283,7 +294,7 @@ func (s *Server) parse() error {
 		}
 		s.pages[name] = t
 	}
-	return nil
+	return s.parseHelp(base)
 }
 
 // page is the data every template gets.

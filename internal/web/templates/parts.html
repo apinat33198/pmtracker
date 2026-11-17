@@ -8,6 +8,7 @@
   <a href="/admin/backups"{{if eq . "backups"}} aria-current="page"{{end}}>Backups</a>
   <a href="/admin/users"{{if eq . "users"}} aria-current="page"{{end}}>Users</a>
   <a href="/admin/activity"{{if eq . "activity"}} aria-current="page"{{end}}>Activity</a>
+  <a class="subnav-help" href="/help/{{if or (eq . "vendors") (eq . "systems")}}admin-vendors{{else if eq . "calendars"}}admin-calendars{{else if eq . "import"}}admin-import{{else if eq . "backups"}}admin-backups{{else if or (eq . "users") (eq . "activity")}}admin-users{{else}}admin-sites{{end}}">Help</a>
 </nav>
 {{end}}
 

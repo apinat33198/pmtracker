@@ -1,0 +1,51 @@
+{{define "helpbody"}}
+<p>vendor แต่ละรายตั้งชื่อนัดไม่เหมือนกัน บางรายใส่รหัส site บางรายใส่ชื่อภาษาไทย บางรายไม่ใส่ระบบ ระบบจับคู่นัดส่วนใหญ่ได้เอง ส่วนที่ไม่แน่ใจจะมารอใน <a href="/inbox">Review inbox</a> ให้คนตัดสินครั้งเดียว และบันทึกเป็นกฎไว้ใช้กับนัดครั้งต่อไปได้</p>
+
+<h2 id="why">ทำไม event มาอยู่ใน inbox</h2>
+<p>event จะมาที่ inbox เมื่อดูเหมือน PM แต่ผูกกับ task ที่แน่นอนไม่ได้ เช่น:</p>
+<ul>
+  <li>รู้ว่าเป็น PM แต่หา site ไม่เจอ (<i>Site not recognised</i>) เช่น รหัสใหม่ที่ยังไม่มีในระบบ หรือชื่อเรียก site ที่ยังไม่ได้ใส่เป็นชื่ออื่น (other names) ของ site</li>
+  <li>site นั้นมีสอง vendor ทำ system เดียวกัน และนัดไม่บอกว่า vendor ไหน (<i>More than one vendor services this system here; pick one</i>)</li>
+  <li>นัดไม่บอก system และ site มีหลาย task (<i>No system or vendor in the event; several tasks at this site fit</i>)</li>
+  <li>site ยังไม่มี task ของ system นั้น</li>
+</ul>
+<figure>
+  <img src="{{asset "help/inbox.webp"}}" alt="รายการใน Review inbox: ชื่อนัด เหตุผลที่จับคู่ได้และไม่ได้ ตัวเลือก task และปุ่ม Link visit" width="1000" height="289" loading="lazy">
+  <figcaption>event หนึ่งรายการใน Review inbox</figcaption>
+</figure>
+<p>แต่ละรายการแสดงวันที่ ชื่อนัด ปฏิทิน ผู้จัด สถานที่ ผู้ร่วมนัด และเหตุผล: ✓ คือสิ่งที่ระบบรู้แล้ว ✗ คือสิ่งที่ขาด นัดที่เกิดซ้ำ (recurring) แสดงครั้งที่ใกล้วันนี้ที่สุดครั้งเดียว พร้อมบอกว่ามีอีกกี่ครั้ง</p>
+
+<h2 id="link">ตัดสิน event <span class="role">editor</span></h2>
+<ol class="steps">
+  <li>เลือก task ใน <b class="ui">Likely tasks</b> (ถ้ามีตัวเลือกเดียวจะติ๊กไว้ให้แล้ว) หรือเลือกจาก <b class="ui">Or another task</b> ซึ่งแสดงทุก task จัดกลุ่มตาม site</li>
+  <li>เลือก <b class="ui">Apply to</b>:
+    <ul>
+      <li><b class="ui">This event only</b>: เฉพาะนัดนี้</li>
+      <li><b class="ui">Every event in this recurring series</b>: ทุกครั้งของนัดที่เกิดซ้ำ (เลือกไว้ให้ถ้าเป็นนัดซ้ำ) เหมาะกับ vendor ที่ลงนัดรายไตรมาสไว้ล่วงหน้า</li>
+      <li><b class="ui">Every event titled “…”</b>: ทุกนัดที่ชื่อตรงกันทุกตัวอักษร</li>
+    </ul>
+  </li>
+  <li>กด <b class="ui">Link visit</b> นัดกลายเป็น visit ของ task ที่เลือกทันที ถ้าเลือกเป็นกฎ นัดอื่นที่ตรงกฎก็ถูกจับคู่ไปด้วย</li>
+</ol>
+<p>ถ้าไม่ใช่ PM (เช่น vendor มาเสนอขาย) กด <b class="ui">Not a PM visit</b> นัดจะออกจาก inbox และไม่ถูกนับ</p>
+<p class="tip">ถ้า site ที่ต้องการไม่มีในรายการ admin เพิ่ม site ใหม่ หรือเพิ่มรหัสในชื่อนัดเป็น <b>Other names</b> ของ site เดิม แล้วนัดจะจับคู่ได้เองในการ sync ครั้งถัดไป{{if .IsAdmin}} (<a href="/help/admin-sites#site-fields">วิธีเพิ่มชื่ออื่นของ site</a>){{end}}</p>
+
+<h2 id="rules">กฎที่ระบบจำไว้</h2>
+<p>ทุกครั้งที่เลือก series หรือ title ระบบสร้าง <b>learned rule</b> ซึ่งใช้ก่อนการจับคู่แบบอื่นทั้งหมด admin ดูและลบกฎได้ที่ <a href="/admin/calendars">Calendars and sync</a> ใต้หัวข้อ <b class="ui">Learned rules</b> การตัดสินแบบ <i>This event only</i> ไม่สร้างกฎ</p>
+
+<h2 id="events">หน้า Events</h2>
+<p><a href="/events">Events</a> แสดงทุก event ที่อ่านจากปฏิทินที่ติดตาม พร้อมผลการจับคู่และเหตุผล ใช้ตรวจว่าทำไมนัดหนึ่งถึงไม่ขึ้น หรือขึ้นผิด task:</p>
+<ul>
+  <li>กรองด้วยปุ่มด้านบน: <b class="ui">All</b>, <b class="ui">PM visits</b> (จับคู่แล้ว), <b class="ui">Needs review</b> (อยู่ใน inbox), <b class="ui">Not PM</b></li>
+  <li>คอลัมน์ <b class="ui">Result</b>: <span class="tag tag-full">PM visit</span> พร้อม task ที่ผูก, <span class="tag tag-partial">Needs review</span>, <span class="tag">Not PM</span> หรือ <span class="tag">Not PM, by hand</span></li>
+  <li>คอลัมน์ <b class="ui">Why</b>: เหตุผลแบบเดียวกับใน inbox</li>
+  <li>นัดที่ถูกยกเลิกจะมีขีดฆ่า</li>
+  <li>event ที่ตัดสินด้วยมือมีปุ่ม <b class="ui">Undo decision</b> <span class="role">editor</span> เพื่อยกเลิกการตัดสิน event จะกลับไปให้ระบบจับคู่ใหม่ (และอาจกลับเข้า inbox)</li>
+</ul>
+
+<h2 id="titles">ช่วยให้ระบบจับคู่ได้เอง</h2>
+<p>ขอให้ vendor ตั้งชื่อนัดแบบนี้จะจับคู่ได้ทุกครั้ง:</p>
+<pre><code>[PM] BKK1 UPS – ABC Power
+[PM] BKK1 DC, UPS – VoltEdge</code></pre>
+<p>คือขึ้นต้นด้วย <code>[PM]</code> ตามด้วยรหัส site, ชื่อ system (หลายระบบคั่นด้วยจุลภาค) และขีดตามด้วยชื่อ vendor ลำดับที่ระบบใช้จับคู่ทั้งหมดอยู่ที่ <a href="/help/admin-calendars#matching">Calendars และการ sync</a></p>
+{{end}}

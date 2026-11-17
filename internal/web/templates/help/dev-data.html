@@ -1,0 +1,84 @@
+{{define "helpbody"}}
+<p>ข้อมูลทั้งหมดอยู่ในไฟล์ JSON ไฟล์เดียว (<code>data_file</code> ในเซิร์ฟเวอร์นี้คือ <code>{{.Cfg.DataFile}}</code>) อ่านเข้าหน่วยความจำตอนเริ่ม และเขียนใหม่ทั้งไฟล์ทุกครั้งที่ข้อมูลเปลี่ยน ปริมาณข้อมูลน้อย (21 site, visit ไม่กี่ร้อยครั้งต่อปี) แบบนี้จึงพอ และ method ของ store ออกแบบให้ย้ายไปเป็นตาราง SQL ได้ตรง ๆ</p>
+
+<h2 id="files">ไฟล์บนเซิร์ฟเวอร์</h2>
+<div class="tbl"><table>
+  <thead><tr><th>ไฟล์</th><th>มีอะไร</th></tr></thead>
+  <tbody>
+    <tr><td><code>data.json</code></td><td class="wrap">ข้อมูลทั้งหมด สิทธิ์ 0600 อ่านได้เฉพาะ service</td></tr>
+    <tr><td><code>data-activity/activity-YYYY-MM-DD.jsonl</code></td><td class="wrap">activity log วันละไฟล์ (วันตาม UTC) หนึ่งบรรทัดต่อหนึ่งรายการ เขียนต่อท้ายอย่างเดียว ลบไฟล์ที่เก่ากว่า <code>activity.keep_days</code></td></tr>
+    <tr><td><code>backups/pmtracker-YYYY-MM-DD.json.gz</code></td><td class="wrap">สำรองรายวัน, <code>…-HHMMSS-manual.json.gz</code> จาก Back up now และ <code>…-before-restore.json.gz</code> ก่อน restore</td></tr>
+    <tr><td><code>data.json.before-update</code></td><td class="wrap">สำเนาที่ <code>install.sh</code> และ <code>push.sh</code> ทำไว้ก่อนอัปเดตโปรแกรม</td></tr>
+  </tbody>
+</table></div>
+
+<h2 id="state">โครงสร้าง data.json</h2>
+<div class="tbl"><table>
+  <thead><tr><th>key</th><th>เนื้อหา</th></tr></thead>
+  <tbody>
+    <tr><td><code>version</code></td><td class="wrap">เวอร์ชันรูปแบบไฟล์ (ปัจจุบัน 3 ซึ่งเพิ่ม incidents) ไฟล์เก่าถูกอัปเกรดตอนเปิด</td></tr>
+    <tr><td><code>catalog</code></td><td class="wrap">sites, systems, vendors, tasks และ calendars</td></tr>
+    <tr><td><code>sync</code></td><td class="wrap">สถานะ sync ต่อปฏิทิน: sync token, เวลา sync ล่าสุด, ข้อผิดพลาดล่าสุด</td></tr>
+    <tr><td><code>events</code></td><td class="wrap">สำเนา (mirror) ของ event จาก Google key คือ <code>calendarID|eventID</code></td></tr>
+    <tr><td><code>decisions</code></td><td class="wrap">การตัดสินใน Review inbox ต่อ event (link หรือ ignore)</td></tr>
+    <tr><td><code>rules</code></td><td class="wrap">learned rules (series หรือ title)</td></tr>
+    <tr><td><code>marks</code></td><td class="wrap">การยืนยัน visit: done หรือ missed ต่อ visit ID</td></tr>
+    <tr><td><code>manual</code></td><td class="wrap">visit ที่บันทึกเอง</td></tr>
+    <tr><td><code>changes</code></td><td class="wrap">ประวัติการเลื่อนและยกเลิกนัดที่ sync เห็น</td></tr>
+    <tr><td><code>jobs</code>, <code>findings</code>, <code>incidents</code></td><td class="wrap">ad-hoc job, finding และ incident (incident มี timeline ใน <code>notes</code>)</td></tr>
+    <tr><td><code>next_id</code></td><td class="wrap">เลขถัดไปที่ใช้ร่วมกันสำหรับ rule, visit ที่บันทึกเอง, job, finding และ incident ตอนเปิดไฟล์ถูกปรับให้มากกว่าทุกเลขที่ใช้อยู่ เพื่อไม่ให้ซ้ำแม้แก้ไฟล์เอง</td></tr>
+    <tr><td><code>users</code></td><td class="wrap">บัญชี: username, บทบาท, hash รหัสผ่าน, epoch (เพิ่มเมื่อต้อง sign out ทุกเครื่อง), sign in ล่าสุด</td></tr>
+    <tr><td><code>session_secret</code></td><td class="wrap">กุญแจเซ็น cookie ไม่อยู่ในไฟล์สำรอง และ restore ไม่รับกุญแจจากไฟล์</td></tr>
+    <tr><td><code>demo</code></td><td class="wrap">ไฟล์ที่สร้างโดย <code>-demo</code> (demo จะไม่ทับไฟล์ที่ไม่ใช่ demo)</td></tr>
+  </tbody>
+</table></div>
+
+<h2 id="writes">การเขียนไฟล์</h2>
+<ol class="steps">
+  <li>method ของ store ล็อก แก้ข้อมูลในหน่วยความจำ และตรวจ (<code>Clean</code>, <code>Validate</code>, <code>CheckLinks</code>)</li>
+  <li><code class="fn">store.Store.write</code> เขียนทั้งไฟล์ลง temp file ในโฟลเดอร์เดียวกัน, fsync, rename ทับไฟล์เดิม และ fsync โฟลเดอร์ ไฟล์จึงไม่เสียแม้ไฟดับกลางคัน</li>
+  <li>ถ้าเขียนไม่สำเร็จ ข้อมูลในหน่วยความจำย้อนกลับ และ activity ของการเปลี่ยนนั้นถูกทิ้ง</li>
+  <li>ถ้าสำเร็จ จึงเขียน activity log (และสำเนาลง log ของเซิร์ฟเวอร์ <code>activity: …</code>)</li>
+</ol>
+<p>sync ที่ไม่มีอะไรเปลี่ยนอัปเดตเฉพาะในหน่วยความจำ ไม่เขียนไฟล์ ถ้าโปรแกรมรีสตาร์ตก่อนการเขียนครั้งถัดไป sync token เดิมยังใช้ได้ และระบบจะอ่านการเปลี่ยนแปลงนับจากนั้นมาใหม่</p>
+
+<h2 id="restore">การตรวจตอน restore</h2>
+<ul>
+  <li>อ่านแบบ strict: key ที่ไม่รู้จักทำให้ไม่ผ่าน</li>
+  <li>เวอร์ชันใหม่กว่าโปรแกรม: ปฏิเสธพร้อมบอกให้อัปเดตโปรแกรมก่อน</li>
+  <li>ตรวจ catalog, job, finding และ incident ทุกรายการ (เลขไม่ซ้ำ, เลขอ้างอิง incident ไม่ซ้ำ, ผ่าน <code>Clean</code>)</li>
+  <li>ลิงก์ที่ชี้ไปของที่ไม่มีถูกตัดทิ้งแทนการปฏิเสธ</li>
+  <li>ใช้กุญแจ session เดิมของเซิร์ฟเวอร์ และเพิ่ม epoch ทุกบัญชี (ทุกคนถูก sign out)</li>
+</ul>
+
+<h2 id="scale">ผลวัดสำหรับ production</h2>
+<p>วัดด้วยข้อมูลจำลองแบบ production: 21 site, 69 task, PM รายไตรมาส และนัดอื่นในปฏิทินที่แชร์ 8 รายการต่อ task ต่อปี (828 event ต่อปี), finding 150 รายการต่อปี บนเครื่อง 2 vCPU (container 1 core จะช้ากว่า):</p>
+<div class="tbl"><table>
+  <thead><tr><th>ประวัติที่เก็บ</th><th>Event</th><th>ไฟล์</th><th>บันทึกต่อครั้ง</th><th>สร้างหน้าละ</th></tr></thead>
+  <tbody>
+    <tr><td>1 ปี</td><td>828</td><td>0.9 MB</td><td>11 ms</td><td>18 ms</td></tr>
+    <tr><td>2 ปี (ช่วง sync)</td><td>1,656</td><td>1.7 MB</td><td>22 ms</td><td>49 ms</td></tr>
+    <tr><td>5 ปี</td><td>4,140</td><td>4.2 MB</td><td>60 ms</td><td>105 ms</td></tr>
+    <tr><td>10 ปี</td><td>8,280</td><td>8.5 MB</td><td>102 ms</td><td>197 ms</td></tr>
+  </tbody>
+</table></div>
+<p>สรุป: ขนาดนี้ไฟล์ JSON ไม่ใช่คอขวด สิ่งที่ต้องระวังใน production:</p>
+<ul>
+  <li><b>RPO:</b> สำรองวันละครั้งบนดิสก์เดียวกัน อาจเสียข้อมูลได้ถึง 1 วัน แก้ด้วย <code>backup.dir</code> บน NAS และ Proxmox Backup Server</li>
+  <li><b>restore แทนที่ทั้งหมด</b> รวมสิ่งที่บันทึกหลังไฟล์สำรอง</li>
+  <li><b>ประวัติ PM เก่ากว่า <code>sync_lookback_months</code></b> หายเมื่อ Google ให้ sync ใหม่ทั้งหมด</li>
+  <li><b>ต้นทุนโตตามข้อมูล</b>: ทุกหน้าคำนวณใหม่จากข้อมูลทั้งหมด ทุกการเปลี่ยนเขียนทั้งไฟล์ ใช้ได้ดีถึงราว 5 MB</li>
+  <li><b>ไม่มีที่เก็บไฟล์แนบ</b> (รูป รายงาน vendor)</li>
+</ul>
+
+<h2 id="sqlite">ขั้นต่อไป: SQLite</h2>
+<p>ย้ายเมื่อเริ่มแนบรูปหรือรายงาน, ไฟล์เกินราว 5 MB, หรือต้องเก็บประวัตินานขึ้น:</p>
+<ul>
+  <li><code>modernc.org/sqlite</code> (pure Go ไม่ใช้ CGO, ยังเป็น binary ตัวเดียว) เป็น dependency ภายนอกตัวแรก</li>
+  <li>WAL mode, หนึ่งตารางต่อชนิดข้อมูล, visit เป็นแถวของตัวเอง (ประวัติไม่ขึ้นกับ mirror ของปฏิทิน), timeline ของ incident เป็นตาราง insert-only, หน้าเว็บ query เฉพาะที่ต้องแสดง</li>
+  <li>ไฟล์แนบเก็บบนดิสก์ตั้งชื่อด้วย SHA-256 ข้อมูลไฟล์อยู่ใน SQLite</li>
+  <li><code>VACUUM INTO</code> รายคืน และ Litestream ส่งต่อแบบต่อเนื่องไป S3 (MinIO บน NAS หรือ Cloudflare R2) ทำให้ RPO เหลือไม่กี่วินาที</li>
+  <li>ย้ายข้อมูลโดย import <code>data.json</code> ครั้งเดียวตอนเริ่ม และเก็บรูปแบบ JSON export ไว้สำหรับ backup และย้ายเซิร์ฟเวอร์</li>
+</ul>
+<p>รายละเอียดเพิ่มเติมอยู่ใน <code>docs/incidents-and-storage.md</code> ใน repo</p>
+{{end}}

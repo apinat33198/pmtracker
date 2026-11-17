@@ -1,0 +1,62 @@
+{{define "helpbody"}}
+<p><b>Finding</b> คือสิ่งที่ PM หรือการเดินตรวจห้องพบ เช่น อุปกรณ์เสื่อม ค่าที่วัดได้เกินเกณฑ์ ของวางเกะกะ ความเสี่ยงด้านความปลอดภัย หรือไอเดียปรับปรุงงาน PM คือวงจร PDCA รายไตรมาสอยู่แล้ว แต่ส่วนใหญ่บันทึกแค่ Do (มาทำแล้ว) finding เติม Check และ Act: ติดตามจนแก้เสร็จ และดูว่าอะไรเกิดซ้ำ (แนวคิด Kaizen)</p>
+<p>finding <b>ไม่เปลี่ยน</b>สถานะ PM หรือตาราง Overview สิ่งที่<b>เกิดขึ้นแล้ว</b>และกระทบห้อง เช่น UPS ไป bypass ให้บันทึกเป็น <a href="/help/incidents">incident</a> แทน</p>
+
+<h2 id="log">บันทึก finding <span class="role">editor</span></h2>
+<p>เริ่มได้จากหลายที่:</p>
+<ul>
+  <li>ปุ่ม <b class="ui">Log finding</b> บน visit ที่ทำแล้ว (หน้า site หรือหน้า task): กรอกวันที่ site และ system ให้</li>
+  <li>ปุ่ม <b class="ui">Log a finding</b> ที่หน้า <a href="/findings">Findings</a> หรือหน้า site, หรือลิงก์ในหน้า task</li>
+</ul>
+<p>ช่องในฟอร์ม:</p>
+<div class="tbl"><table>
+  <thead><tr><th>ช่อง</th><th>กรอกอะไร</th></tr></thead>
+  <tbody>
+    <tr><td>Finding</td><td class="wrap">พบอะไร หนึ่งบรรทัด เช่น <i>Battery string 2: three cells over the resistance limit</i></td></tr>
+    <tr><td>Found on</td><td class="wrap">วันที่พบ (ห้ามเป็นวันในอนาคต)</td></tr>
+    <tr><td>PM task</td><td class="wrap">system และ vendor ที่เกี่ยวข้อง หรือ <i>Not from a PM task</i></td></tr>
+    <tr><td>Kind</td><td class="wrap">{{range $i, $c := findingKinds}}{{if $i}}, {{end}}<b>{{$c.Label}}</b>{{end}}</td></tr>
+    <tr><td>Severity</td><td class="wrap">{{range $i, $c := findingSeverities}}{{if $i}}; {{end}}<b>{{$c.Label}}</b>: {{$c.Hint}}{{end}}</td></tr>
+    <tr><td>Reading</td><td class="wrap">ค่าที่วัดได้และเกณฑ์ เช่น <i>6.2 mΩ, limit 5.5</i> ตัวเลขช่วยให้เห็นแนวโน้มก่อนอุปกรณ์เสีย เครื่องหมายถูกเฉย ๆ ไม่ช่วย</td></tr>
+    <tr><td>Details</td><td class="wrap">ตรงไหน vendor ว่าอย่างไร เลขที่รายงาน</td></tr>
+    <tr><td>Who fixes it</td><td class="wrap">vendor หรือคนที่รับไปแก้</td></tr>
+    <tr><td>Target date</td><td class="wrap">วันที่ควรแก้เสร็จ</td></tr>
+    <tr><td>Status</td><td class="wrap">{{range $i, $c := findingStatuses}}{{if $i}}, {{end}}<b>{{$c.Label}}</b>{{end}}</td></tr>
+    <tr><td>Repeat of</td><td class="wrap">finding ก่อนหน้าที่ site เดียวกันที่กลับมาอีก</td></tr>
+    <tr><td>Other sites</td><td class="wrap">{{range $i, $c := findingSpreads}}{{if $i}}; {{end}}<b>{{$c.Label}}</b>: {{$c.Hint}}{{end}}</td></tr>
+    <tr><td>Root cause</td><td class="wrap">สาเหตุที่แท้จริง ถามว่า “ทำไม” ไปเรื่อย ๆ จนเจอสิ่งที่แก้ได้</td></tr>
+    <tr><td>What was done</td><td class="wrap">สิ่งที่แก้ และสิ่งที่เปลี่ยนเพื่อไม่ให้เกิดอีก เช่น checklist สัญญา layout <b>ต้องกรอกก่อนปิด</b></td></tr>
+  </tbody>
+</table></div>
+<p>กรอกเท่าที่รู้ตอนนี้ก่อนได้ ที่เหลือค่อยแก้ภายหลังจากหน้า finding</p>
+
+<h2 id="follow">ติดตามจนปิด</h2>
+<ul>
+  <li>หน้า finding แสดงสถานะ ความรุนแรง และคำแนะนำว่าต้องทำอะไรต่อ เช่น เลยวันเป้าหมายแล้วให้ตามคนแก้</li>
+  <li>finding ที่เลยวันเป้าหมายเป็น <span class="pill s-overdue">Past target</span> และขึ้นใน digest รายวัน</li>
+  <li>ปิดโดยเปลี่ยน <b class="ui">Status</b> เป็น <b>Closed</b> กรอก <b class="ui">What was done</b> และวันที่ปิด (เว้นว่าง = วันนี้) แล้วกด <b class="ui">Save</b></li>
+  <li>ถ้าติ๊กว่า <b>Check the other sites</b> หลังปิดแล้วยังต้องไปตรวจ site อื่นและเปลี่ยนเป็น <b>Other sites checked</b> (yokoten: ขยายผลการแก้ไปที่อื่น)</li>
+</ul>
+
+<h2 id="repeats">เมื่อปัญหากลับมาอีก</h2>
+<p>ในหน้า finding เดิมกด <b class="ui">Log this coming back</b> ระบบสร้าง finding ใหม่ที่ผูกกับอันเดิม (repeat) หน้า finding แสดงทุกครั้งที่ปัญหานี้กลับมาเรียงตามเวลา ถ้ากลับมาซ้ำหลายครั้ง แปลว่าการแก้ยังไม่ถึงต้นเหตุ ตัวอย่างใน demo: สัญญาณเตือน high pressure ของ CRAC 1 ที่ CNX1 ที่ล้างคอยล์ไปสามรอบแล้วยังกลับมา</p>
+<p>ถ้า finding นำไปสู่เหตุขัดข้องจริง กด <b class="ui">log an incident</b> ในหน้า finding เพื่อบันทึก incident ที่ผูกกับ finding นี้</p>
+
+<h2 id="measures">ตัววัดผล</h2>
+<p>หน้า <a href="/findings">Findings</a> มีตัววัด สำหรับทุก site หรือ site เดียว (เลือกใน Site) ช่วง 12 เดือนที่ผ่านมา:</p>
+<div class="tbl"><table>
+  <thead><tr><th>ตัววัด</th><th>อ่านอย่างไร</th></tr></thead>
+  <tbody>
+    <tr><td>Open</td><td class="wrap">ที่ยังเปิดอยู่ กี่รายการเป็น High และกี่รายการกำลังแก้</td></tr>
+    <tr><td>Past target date</td><td class="wrap">เปิดอยู่และเลยวันเป้าหมาย ควรเป็นศูนย์</td></tr>
+    <tr><td>Days to close</td><td class="wrap">ค่ามัธยฐานของจำนวนวันจากพบถึงปิด ยิ่งน้อยยิ่งดี</td></tr>
+    <tr><td>Closed on time</td><td class="wrap">สัดส่วนที่ปิดทันวันเป้าหมาย</td></tr>
+    <tr><td>Repeats</td><td class="wrap">สัดส่วนที่เป็นปัญหาเดิมกลับมา ยิ่งน้อยยิ่งแปลว่าแก้ถึงต้นเหตุ</td></tr>
+    <tr><td>Other sites to check</td><td class="wrap">จำนวนที่ยังต้องไปตรวจ site อื่น</td></tr>
+  </tbody>
+</table></div>
+<p>ใต้รายการมีตารางแยกตาม site และตาม vendor site ที่มี repeat มากต้องดูต้นเหตุ ไม่ใช่แก้ซ้ำ ปุ่ม <b class="ui">Export CSV</b> ดาวน์โหลดทุก finding</p>
+
+<h2 id="delete">การลบ</h2>
+<p>finding เป็นหลักฐานสำหรับ audit (ISO 27001 ข้อ 10.2) จึง<b>ลบได้เฉพาะ admin</b> และควรลบเฉพาะที่บันทึกผิด finding ที่จัดการแล้วให้ปิด ไม่ใช่ลบ การลบถูกบันทึกใน activity log ถ้าลบ PM task ไป finding ยังอยู่ที่ site เดิม</p>
+{{end}}

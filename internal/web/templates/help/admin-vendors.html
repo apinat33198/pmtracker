@@ -1,0 +1,32 @@
+{{define "helpbody"}}
+<p>รายชื่อ vendor และ system เป็นข้อมูลกลางที่ทุกฟอร์มใช้ ข้อมูลที่ครบช่วยให้นัดในปฏิทินจับคู่ได้เองมากขึ้น และทีมโทรหา vendor ได้จากหน้า site ทันที</p>
+
+<h2 id="vendor-fields">ข้อมูล vendor</h2>
+<p>ที่ <a href="/admin/vendors">Admin › Vendors</a> กด <b class="ui">Add a vendor</b> หรือ <b class="ui">Edit</b>:</p>
+<div class="tbl"><table>
+  <thead><tr><th>ช่อง</th><th>ใช้ทำอะไร</th></tr></thead>
+  <tbody>
+    <tr><td>Name</td><td class="wrap">ชื่อที่แสดงทุกที่ในแอป</td></tr>
+    <tr><td>Contact person, Phone, Email</td><td class="wrap">แสดงในหน้า site, หน้า task และ By vendor กดโทรหรืออีเมลได้</td></tr>
+    <tr><td>Email domains</td><td class="wrap">นัดที่ผู้จัดหรือผู้ร่วมนัดใช้อีเมลโดเมนนี้จะถูกผูกกับ vendor นี้ <b>สำคัญที่สุดสำหรับการจับคู่</b> ใส่อีเมลแล้วระบบเพิ่มโดเมนให้เอง ยกเว้นโดเมนอีเมลทั่วไปอย่าง gmail.com</td></tr>
+    <tr><td>Other names in event titles</td><td class="wrap">ชื่อย่อหรือชื่อเรียกที่ vendor ใช้ในชื่อนัด คั่นด้วยจุลภาค เช่น <code>VoltEdge</code></td></tr>
+    <tr><td>Notes</td><td class="wrap">เลขสัญญา เวลาทำการ ฯลฯ</td></tr>
+  </tbody>
+</table></div>
+<p>หน้ารายการแสดงว่าแต่ละ vendor ดูแล system อะไรที่ site ไหน และมีกี่ task ที่ต้องตาม (overdue, due soon, off-cycle) หน้า vendor แสดงทุก task ของ vendor นั้น</p>
+
+<h2 id="move">ย้าย task ไป vendor อื่น</h2>
+<p>เมื่อสัญญาเปลี่ยนผู้รับจ้าง: เปิดหน้า vendor เดิม ที่ <b class="ui">Change vendor or delete</b> เลือก vendor ใหม่ใน <b class="ui">Move tasks to</b> ติ๊ก <b class="ui">Then delete …</b> ถ้าจะลบ vendor เดิมด้วย แล้วกด <b class="ui">Move tasks</b> ทุก task ย้ายไปพร้อมประวัติ visit เดิม</p>
+
+<h2 id="delete-vendor">ลบ vendor</h2>
+<p>ลบได้เมื่อไม่มี PM task เหลือแล้ว ย้ายหรือลบ task ก่อน visit ในอดีตไม่ได้รับผลกระทบ</p>
+
+<h2 id="systems">Systems</h2>
+<p><a href="/admin/systems">Admin › Systems</a> คือชนิดอุปกรณ์ที่ทำ PM แต่ละ system เป็นหนึ่งคอลัมน์ในหน้า Overview (แสดงเฉพาะ system ที่มี task)</p>
+<ul>
+  <li><b class="ui">Name</b>: ชื่อที่แสดง</li>
+  <li><b class="ui">Other names in titles</b>: คำที่ระบบหาในชื่อนัดเพื่อรู้ว่าเป็น system นี้ เช่น CRAC อาจมี <code>PAC, Precision AC, แอร์</code></li>
+  <li>ลบ system ได้เมื่อไม่มี task ใช้อยู่</li>
+</ul>
+<p class="warn-box">ตั้งชื่ออื่นให้เฉพาะเจาะจง คำสั้นอย่าง <code>DC</code> อาจหมายถึง “data centre” ในชื่อนัดได้ด้วย ทำให้ระบบจับคู่ผิด ฟอร์มเพิ่ม task มีช่องค้นหา system: พิมพ์ชื่อหรือชื่ออื่น (เช่น PAC จะเจอ CRAC) ถ้าพิมพ์ชื่อที่ตรงกับ system เดิม ระบบใช้ system เดิมเสมอ จึงไม่เกิดคอลัมน์ซ้ำ</p>
+{{end}}

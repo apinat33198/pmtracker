@@ -1,0 +1,38 @@
+{{define "helpbody"}}
+<p>นอกจากเปิดหน้าเว็บ PM Tracker ยังส่งสรุปรายวัน ให้ฟีดปฏิทิน และ export ข้อมูลเป็น CSV ได้</p>
+
+<h2 id="digest">Digest รายวัน</h2>
+<p>ทุกวัน{{with .Cfg.Digest.Time}} เวลา {{.}} น.{{end}} ระบบส่งสรุปสั้น ๆ ทาง Telegram ถ้าไม่มีอะไรต้องทำ วันนั้นจะไม่ส่ง สรุปมีหัวข้อเหล่านี้เมื่อมีรายการ:</p>
+<ul>
+  <li><b>Overdue</b>, <b>Due soon, not booked</b> และ <b>Booked off-cycle</b>: task พร้อมวันครบกำหนดและเลยหรือเหลือกี่วัน</li>
+  <li><b>Ad-hoc jobs due</b>: งานที่ถึงวันหรือเลยวัน</li>
+  <li><b>Findings past their target date</b></li>
+  <li><b>Incidents needing attention</b>: ที่ยังควบคุมอยู่ ที่การแก้เลยกำหนด หรือที่ความเสี่ยง High ขึ้นไป</li>
+  <li>จำนวน event ที่รออยู่ใน Review inbox และจำนวน visit ที่รอยืนยัน</li>
+</ul>
+<p>ท้ายข้อความมีลิงก์กลับมาที่แอป {{if .Cfg.Digest.Time}}{{if and .Cfg.Digest.TelegramBotToken .Cfg.Digest.TelegramChatID}}เซิร์ฟเวอร์นี้ส่ง digest เข้า Telegram แล้ว{{else}}เซิร์ฟเวอร์นี้ยังไม่ได้ตั้ง Telegram จึงเขียน digest ลง log เท่านั้น{{end}}{{else}}เซิร์ฟเวอร์นี้ปิด digest อยู่ (ไม่ได้ตั้ง <code>digest.time</code>){{end}} {{if .IsAdmin}}ดูตัวอย่าง digest ของวันนี้ได้ที่ <a href="/admin/calendars#digest">Calendars and sync</a> และวิธีตั้งค่าอยู่ที่ <a href="/help/dev-config#digest">config.json</a>{{else}}ข้อความของวันนี้ดูได้ที่ <a href="/digest.txt">/digest.txt</a>{{end}}</p>
+
+<h2 id="feed">ฟีดปฏิทินคาดการณ์ (.ics)</h2>
+<p>ฟีดนี้มีวันครบกำหนดครั้งถัดไปของทุก task และอีกสามรอบข้างหน้า สมัครใน Google Calendar ได้ที่ <b class="ui">Other calendars</b> → <b class="ui">From URL</b> แล้ววางลิงก์ฟีด ทีมจะเห็นกำหนด PM ในปฏิทินของตัวเอง</p>
+<ul>
+  <li>{{if .Cfg.Feed.Token}}เซิร์ฟเวอร์นี้เปิดฟีดอยู่{{if .IsAdmin}} ลิงก์อยู่ที่ <a href="/admin/calendars#feed">Calendars and sync</a>{{else}} ขอลิงก์จาก admin{{end}}{{else}}เซิร์ฟเวอร์นี้ปิดฟีดอยู่ (ไม่ได้ตั้ง <code>feed.token</code>){{end}}</li>
+  <li>ทุกคนที่มีลิงก์อ่านฟีดได้โดยไม่ต้อง sign in เพราะ Google Calendar ไม่ sign in ให้ จึงไม่ควรส่งต่อลิงก์</li>
+  <li>Google อัปเดตฟีดที่สมัครไว้ตามรอบของ Google เอง มักห่างกันหลายชั่วโมง ข้อมูลล่าสุดดูที่แอปเสมอ</li>
+</ul>
+
+<h2 id="csv">Export CSV</h2>
+<div class="tbl"><table>
+  <thead><tr><th>ไฟล์</th><th>ปุ่มอยู่ที่</th><th>มีอะไร</th></tr></thead>
+  <tbody>
+    <tr><td>สถานะ task</td><td><a href="/">Overview</a></td><td class="wrap">ทุก task พร้อม PM ล่าสุด วันครบกำหนด สถานะ คอลัมน์แรก ๆ import กลับได้</td></tr>
+    <tr><td>Jobs</td><td><a href="/jobs">Jobs</a></td><td class="wrap">ทุก ad-hoc job รวมที่เสร็จแล้ว</td></tr>
+    <tr><td>Findings</td><td><a href="/findings">Findings</a></td><td class="wrap">ทุก finding รวมสาเหตุ สิ่งที่ทำ และจำนวนวันที่ใช้ปิด</td></tr>
+    <tr><td>Incidents</td><td><a href="/incidents">Incidents</a></td><td class="wrap">ทุก incident รวมคะแนนความเสี่ยงก่อนและหลัง เวลาที่ใช้กู้บริการ</td></tr>
+    <tr><td>Activity</td><td>Admin › Activity</td><td class="wrap">บันทึกกิจกรรมทั้งหมดที่เก็บไว้ (admin เท่านั้น)</td></tr>
+  </tbody>
+</table></div>
+<p>ไฟล์เปิดใน Excel ได้โดยภาษาไทยไม่เพี้ยน ข้อความที่ขึ้นต้นด้วย <code>=</code>, <code>+</code>, <code>-</code> หรือ <code>@</code> จะมี <code>'</code> นำหน้า เพื่อไม่ให้ Excel ตีความเป็นสูตร</p>
+
+<h2 id="sync">Sync now <span class="role">editor</span></h2>
+<p>ระบบอ่านปฏิทินเองทุก {{.Cfg.SyncIntervalMinutes}} นาที ถ้าเพิ่งได้นัดใหม่จาก vendor และอยากเห็นทันที กดปุ่ม <b class="ui">Sync now</b> ที่แถบด้านบน (บนจอเล็กเป็นไอคอนลูกศรวน) จุดสีข้างปุ่มเป็นสีเขียวเมื่ออ่านสำเร็จ และเป็นสีแดงพร้อมแถบแจ้งเตือนเมื่ออ่านไม่ได้</p>
+{{end}}

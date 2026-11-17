@@ -1,0 +1,76 @@
+{{define "helpbody"}}
+<p>PM Tracker ติดตามงานบำรุงรักษาเชิงป้องกัน (preventive maintenance, PM) ของห้อง DC และ CSR ทุก site ระบบอ่านนัดหมายที่ vendor ส่งเข้า Google Calendar แล้วจับคู่กับงาน PM ของแต่ละ site บอกได้ว่าแต่ละระบบทำ PM ครั้งล่าสุดเมื่อไร ครั้งต่อไปควรเป็นเมื่อไร และอะไรที่เลยกำหนดหรือยังไม่ได้นัด</p>
+<p>ระบบนี้<b>อ่านปฏิทินอย่างเดียว</b> ไม่สร้างหรือแก้นัดใน Google Calendar การนัด vendor ยังทำทางเดิม PM Tracker ช่วยให้เห็นภาพรวมและไม่มีงานไหนหลุด</p>
+
+<h2 id="concepts">คำที่ใช้ทั้งแอป</h2>
+<dl class="terms">
+  <dt>Site</dt>
+  <dd>ห้อง DC หรือ CSR หนึ่งแห่ง มีรหัสสั้น (เช่น BKK1) ชื่อ และภูมิภาค รหัสและชื่ออื่นของ site ใช้จับคู่กับชื่อนัดในปฏิทิน</dd>
+  <dt>System</dt>
+  <dd>ชนิดอุปกรณ์ที่ต้องทำ PM เช่น DC power, UPS, CRAC, Generator แต่ละ system เป็นหนึ่งคอลัมน์ในหน้า Overview</dd>
+  <dt>Vendor</dt>
+  <dd>บริษัทที่มาทำ PM มีผู้ติดต่อ เบอร์โทร อีเมล และ email domain ที่ใช้จับคู่นัดในปฏิทิน</dd>
+  <dt>PM task</dt>
+  <dd>หน่วยที่ระบบติดตาม คือ “system หนึ่งที่ site หนึ่ง ทำโดย vendor หนึ่ง” เช่น <i>BKK1 UPS โดย ABC Power</i> แต่ละ task มีรอบ PM ของตัวเอง (ค่าเริ่มต้นทุก {{.Cfg.Defaults.IntervalMonths}} เดือน) ถ้า system เดียวกันที่ site เดียวกันมีสอง vendor ก็เป็นสอง task</dd>
+  <dt>Visit</dt>
+  <dd>การมาทำ PM หนึ่งครั้ง มาจากนัดในปฏิทิน หรือคนบันทึกเองก็ได้ visit หนึ่งครั้งครอบคลุมได้หลาย task ถ้า vendor ทำหลายระบบในวันเดียว</dd>
+  <dt>Event</dt>
+  <dd>นัดหนึ่งรายการใน Google Calendar ที่ระบบอ่านมา event ที่จับคู่กับ task ได้จะกลายเป็น visit ส่วนที่ระบบไม่แน่ใจจะไปรออยู่ใน <a href="/inbox">Review inbox</a></dd>
+  <dt>สถานะ (status)</dt>
+  <dd>ตำแหน่งของ task ในรอบ PM เช่น <span class="pill s-overdue">Overdue</span> หรือ <span class="pill s-booked">Booked</span> ดูรายละเอียดที่ <a href="/help/statuses">สถานะและการคำนวณรอบ PM</a></dd>
+</dl>
+
+<h2 id="flow">ข้อมูลไหลอย่างไร</h2>
+<ol class="steps">
+  <li>vendor ส่งนัดเข้าปฏิทิน PM ที่แชร์ให้ระบบ (หรือทีมลงนัดเอง)</li>
+  <li>ทุก {{.Cfg.SyncIntervalMinutes}} นาที ระบบอ่านปฏิทินที่ติดตามอยู่ (กด <b class="ui">Sync now</b> เพื่ออ่านทันทีได้)</li>
+  <li>ระบบดูชื่อนัด สถานที่ ผู้จัด และผู้ร่วมนัด เพื่อหาว่าเป็น PM หรือไม่ เป็นของ site ไหน ระบบไหน vendor ไหน ถ้ามั่นใจก็สร้าง visit ถ้าไม่แน่ใจก็ส่งไป Review inbox ให้คนตัดสิน</li>
+  <li>จาก visit ที่ทำแล้วครั้งล่าสุด ระบบคำนวณวันครบกำหนดครั้งถัดไปและสถานะของทุก task</li>
+  <li>หน้า Overview, digest รายวัน และฟีดปฏิทินแสดงผลลัพธ์ทั้งหมด</li>
+</ol>
+<p class="tip">visit ที่ผ่านไปแล้วจะนับว่าทำแล้วทันที แม้ยังไม่มีใครยืนยัน (<b class="ui">Done, unconfirmed</b>) เพื่อไม่ให้งานขึ้นว่าเลยกำหนดเพียงเพราะยังไม่มีคนกด ถ้า vendor ไม่ได้มาจริง ให้กด <b class="ui">Mark missed</b> ดูที่ <a href="/help/visits">ยืนยันและบันทึก visit</a></p>
+
+<h2 id="roles">บทบาทผู้ใช้</h2>
+<div class="tbl"><table>
+  <thead><tr><th>บทบาท</th><th>ทำอะไรได้</th></tr></thead>
+  <tbody>
+    <tr><td><span class="role">viewer</span></td><td class="wrap">ดูทุกหน้า และ export CSV</td></tr>
+    <tr><td><span class="role">editor</span></td><td class="wrap">ทุกอย่างที่ viewer ทำได้ และตัดสิน event ใน Review inbox, ยืนยันหรือ mark missed visit, บันทึก visit เอง, กด Sync now, เพิ่มและปิด ad-hoc job, บันทึกและปิด finding และ incident</td></tr>
+    <tr><td><span class="role">admin</span></td><td class="wrap">ทุกอย่างที่ editor ทำได้ และจัดการ site, task, vendor, system, ปฏิทิน, import, backup, ผู้ใช้, ดู activity log, ลบ finding และ incident, ปิด incident ที่ความเสี่ยงคงเหลือยังสูง</td></tr>
+  </tbody>
+</table></div>
+<p>คุณเป็น <span class="role">{{if .IsAdmin}}admin{{else if .IsEditor}}editor{{else}}viewer{{end}}</span> ปุ่มที่บทบาทของคุณใช้ไม่ได้จะไม่แสดงในแอป</p>
+
+<h2 id="menu">เมนูด้านบน</h2>
+<div class="tbl"><table>
+  <thead><tr><th>เมนู</th><th>ใช้ทำอะไร</th></tr></thead>
+  <tbody>
+    <tr><td><a href="/">Overview</a></td><td class="wrap">ตาราง site × system ของทุก site และรายการที่เลยกำหนดหรือถึงกำหนดใน 30 วัน <a href="/help/overview">อ่านต่อ</a></td></tr>
+    <tr><td><a href="/inbox">Review inbox</a></td><td class="wrap">event ที่ดูเหมือน PM แต่ระบบจับคู่เองไม่ได้ ตัวเลขข้างเมนูคือจำนวนที่รออยู่ <a href="/help/inbox">อ่านต่อ</a></td></tr>
+    <tr><td><a href="/jobs">Jobs</a></td><td class="wrap">งานครั้งเดียวนอกรอบ PM เช่นซ่อมพื้นยก <a href="/help/jobs">อ่านต่อ</a></td></tr>
+    <tr><td><a href="/findings">Findings</a></td><td class="wrap">สิ่งที่ PM หรือการเดินตรวจพบ ติดตามจนแก้เสร็จ <a href="/help/findings">อ่านต่อ</a></td></tr>
+    <tr><td><a href="/incidents">Incidents</a></td><td class="wrap">เหตุขัดข้องและ near miss พร้อมการประเมินความเสี่ยง <a href="/help/incidents">อ่านต่อ</a></td></tr>
+    <tr><td><a href="/events">Events</a></td><td class="wrap">ทุก event ที่อ่านมาจากปฏิทิน และเหตุผลที่ระบบตัดสินแบบนั้น <a href="/help/inbox#events">อ่านต่อ</a></td></tr>
+    {{if .IsAdmin}}<tr><td><a href="/admin/sites">Admin</a></td><td class="wrap">ตั้งค่าทั้งหมด (เห็นเฉพาะ admin) <a href="/help/admin-sites">อ่านต่อ</a></td></tr>{{end}}
+    <tr><td>จุดสีเขียว</td><td class="wrap">สถานะการ sync เอาเมาส์ชี้เพื่อดูเวลาที่อ่านปฏิทินล่าสุด ถ้าเป็นสีแดง แปลว่าอ่านปฏิทินไม่สำเร็จ และจะมีแถบแจ้งเตือนสีแดงใต้เมนูบอกสาเหตุ</td></tr>
+    <tr><td>ชื่อผู้ใช้ (มุมขวา)</td><td class="wrap"><a href="/account">Your account</a>, <a href="/help">Help (คู่มือ)</a> และ Sign out</td></tr>
+  </tbody>
+</table></div>
+
+<h2 id="first-day">วันแรก: ทำอะไรก่อน</h2>
+<h3>ผู้ใช้ทั่วไป</h3>
+<ol>
+  <li>เปิด <a href="/">Overview</a> ดูช่องสีแดง (<span class="pill s-overdue">Overdue</span>) และสีเหลือง (<span class="pill s-due_soon">Due soon</span>) ก่อน</li>
+  <li>ถ้ามีแถบเหลืองว่า “past visits are waiting for someone to confirm” ให้เข้าไปยืนยันที่หน้า site</li>
+  <li>ดู <a href="/inbox">Review inbox</a> ว่ามี event รอตัดสินไหม</li>
+</ol>
+{{if .IsAdmin}}
+<h3>Admin</h3>
+<ol>
+  <li>นำเข้า site และ task จาก spreadsheet ที่ <a href="/admin/import">Import and export</a> (<a href="/help/admin-import">วิธีทำ</a>)</li>
+  <li>ใส่ email domain ของ vendor ที่ <a href="/admin/vendors">Vendors</a> เพื่อให้นัดจับคู่เองได้</li>
+  <li>ต่อ Google Calendar และเพิ่มปฏิทินที่ <a href="/admin/calendars">Calendars and sync</a> (<a href="/help/admin-calendars">วิธีทำ</a>)</li>
+  <li>สร้างบัญชีให้ทีมที่ <a href="/admin/users">Users</a> คนละหนึ่งบัญชี ไม่ใช้บัญชีร่วมกัน</li>
+</ol>
+{{end}}
+{{end}}

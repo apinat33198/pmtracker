@@ -1,0 +1,34 @@
+{{define "helpbody"}}
+<p>ข้อมูลทั้งหมด (site, task, vendor, visit, การตัดสินใน inbox, job, finding, incident, ผู้ใช้) อยู่ในไฟล์เดียว ระบบสำรองไฟล์นี้ทุกวัน จัดการได้ที่ <a href="/admin/backups">Admin › Backups</a></p>
+
+<h2 id="daily">สำรองรายวัน</h2>
+<ul>
+  <li>{{if eq .Cfg.Backup.Time "off"}}เซิร์ฟเวอร์นี้ปิดการสำรองรายวันอยู่ (<code>backup.time</code> เป็น <code>"off"</code>){{else}}ทุกวันเวลา {{.Cfg.Backup.Time}} น.{{end}} บีบอัดเป็น <code>.json.gz</code> อ่านได้เฉพาะ service</li>
+  <li>เก็บ {{.Cfg.Backup.KeepDays}} วัน (<code>backup.keep_days</code>) แล้วลบอันเก่า</li>
+  <li>ถ้าเซิร์ฟเวอร์ปิดอยู่ตอนถึงเวลา จะสำรองให้ตอนเปิดเครื่อง</li>
+  <li>กด <b class="ui">Back up now</b> เพื่อสำรองทันที เช่น ก่อนอัปเดตหรือก่อน import ครั้งใหญ่</li>
+  <li><b class="ui">Download</b> ดาวน์โหลดไฟล์สำรอง (ถูกบันทึกใน activity log)</li>
+</ul>
+<p class="warn-box">ค่าเริ่มต้นเก็บไฟล์สำรองไว้บนเซิร์ฟเวอร์เดียวกับข้อมูล ถ้าดิสก์เสียจะเสียทั้งคู่ ให้ตั้ง <code>backup.dir</code> ไปที่ share บน NAS (<a href="/help/dev-deploy#backups-offsite">วิธีตั้ง</a>) ทำ backup ของ container ด้วย Proxmox Backup Server และดาวน์โหลดเก็บไว้ที่อื่นเป็นระยะ</p>
+
+<h2 id="contents">ในไฟล์สำรองมีอะไร</h2>
+<ul>
+  <li>ข้อมูลทั้งหมดรวม<b>hash ของรหัสผ่าน</b> จึงต้องเก็บเป็นความลับ</li>
+  <li><b>ไม่มี</b>กุญแจที่ใช้เซ็น cookie การ sign in ไฟล์ที่หลุดไปจึงใช้ปลอม session ไม่ได้</li>
+  <li><b>ไม่มี</b> activity log ซึ่งเก็บแยกต่างหาก</li>
+</ul>
+
+<h2 id="restore">Restore</h2>
+<ol class="steps">
+  <li>เลือกไฟล์สำรองในรายการแล้วกด <b class="ui">Restore…</b> หรือใช้ <b class="ui">Restore from a file</b> เพื่ออัปโหลดไฟล์ <code>.json.gz</code> ที่ดาวน์โหลดไว้ หรือไฟล์ข้อมูล <code>.json</code> (ใช้ย้ายเซิร์ฟเวอร์)</li>
+  <li>พิมพ์ <code>restore</code> เพื่อยืนยัน แล้วกดปุ่ม restore</li>
+</ol>
+<p>สิ่งที่เกิดขึ้น:</p>
+<ul>
+  <li>ระบบตรวจไฟล์ก่อน ถ้าไม่ใช่ไฟล์สำรองของ PM Tracker หรือข้อมูลไม่ถูกต้อง จะไม่เปลี่ยนอะไร ไฟล์จาก PM Tracker เวอร์ชันใหม่กว่าจะถูกปฏิเสธพร้อมข้อความว่าให้อัปเดตก่อน</li>
+  <li>บันทึกข้อมูลปัจจุบันเป็นไฟล์สำรอง “before restore” ก่อน</li>
+  <li><b>แทนที่ข้อมูลทั้งหมด</b> สิ่งที่บันทึกหลังเวลาของไฟล์สำรองจะหาย รวมถึง finding และ incident</li>
+  <li>ทุกคนถูก sign out</li>
+</ul>
+<p class="tip">ใช้ restore เมื่อเกิดเหตุร้ายแรงหรือย้ายเซิร์ฟเวอร์เท่านั้น ถ้าแก้ข้อมูลผิดไม่กี่รายการ ให้แก้กลับในหน้าเว็บ และ restore เฉพาะไฟล์ที่คุณสำรองเองเท่านั้น เพราะไฟล์สำรองมีบัญชีและรหัสผ่าน</p>
+{{end}}
