@@ -362,8 +362,8 @@ address:
 
 ## Backups
 
-Everything (sites, tasks, vendors, visits, inbox decisions, users, activity) is
-copied every day at 02:30 into `backups/` next to the data file
+Everything (sites, tasks, vendors, visits, inbox decisions, jobs, findings,
+incidents, users) is copied every day at 02:30 into `backups/` next to the data file
 (`/var/lib/pmtracker/backups` on a server), compressed, readable by the
 service only, and kept for 30 days. A copy missed while the tracker was off is
 made when it starts.

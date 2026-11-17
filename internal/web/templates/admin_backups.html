@@ -3,7 +3,7 @@
 <section class="page-head with-tools">
   <div>
     <h1>Backups</h1>
-    <p class="lede">{{if eq $d.Time "off"}}Daily backups are turned off (<code>backup.time</code> is <code>"off"</code> in the config).{{else}}Everything is copied every day at {{$d.Time}}: sites, tasks, vendors, visits, inbox decisions, users and the activity log. Copies are kept for {{$d.KeepDays}} days.{{end}}</p>
+    <p class="lede">{{if eq $d.Time "off"}}Daily backups are turned off (<code>backup.time</code> is <code>"off"</code> in the config).{{else}}Everything is copied every day at {{$d.Time}}: sites, tasks, vendors, visits, inbox decisions, jobs, findings, incidents and users. Copies are kept for {{$d.KeepDays}} days. The activity log is kept on its own and isn't in backups.{{end}}</p>
     <p class="hint small">They're stored on the tracker's server in <code>{{$d.Dir}}</code>. Download one now and then and keep it somewhere else, so losing the server doesn't take the backups with it.</p>
   </div>
   <form method="post" action="/admin/backups"><button>Back up now</button></form>
