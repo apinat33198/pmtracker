@@ -610,19 +610,21 @@ form.danger { margin-top: var(--space-xl); }
   .user-name { display: none; }
   .top-in { gap: var(--space-md); }
 }
+/* With Incidents the menu fills the bar, so on wide screens the last-sync
+   time moves into the dot's tooltip (the dot still turns red when sync fails). */
+.top-sync .sync-text { display: none; }
 @media (max-width: 1200px) {
-  .sync-text { display: none; }
   .sync-btn span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   .top .sync-btn { padding: 0 var(--space-xs); }
 }
 @media (max-width: 1180px) {
   .kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
-@media (max-width: 1024px) {
+@media (max-width: 1120px) {
   .top-in { flex-wrap: wrap; min-height: 0; padding-top: var(--space-xs); gap: 0 var(--space-sm); }
   .nav { order: 5; flex: 1 0 100%; flex-wrap: wrap; align-self: auto; margin: 0 calc(-1 * var(--space-xs)); }
   .nav a { min-height: 44px; }
-  .sync-text { display: inline; }
+  .top-sync .sync-text { display: inline; }
 }
 @media (max-width: 960px) {
   .facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -684,7 +686,7 @@ form.danger { margin-top: var(--space-xl); }
   .jobs .row-menu > form:first-of-type { min-width: 0; }
 }
 @media (max-width: 420px) {
-  .sync-text { display: none; }
+  .top-sync .sync-text { display: none; }
   .top-sync:not(:has(form)) .sync-text { display: inline; } /* room for it when there's no Sync button */
   .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
