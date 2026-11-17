@@ -531,9 +531,17 @@ func (s *Store) ApplySync(calendarID string, full bool, events []core.Event, nex
 		}
 	}
 	c := s.calendar(calendarID)
+	quiet := changed == 0 && !full && c.LastError == ""
 	c.SyncToken, c.LastSyncedAt, c.LastError, c.LastChanges = nextToken, at, "", changed
 	if full {
 		c.LastFullSyncAt = at
+	}
+	// A sync that found nothing new only moves the bookkeeping on. Keep it
+	// in memory instead of rewriting the whole file every few minutes: if
+	// the tracker restarts first, the older sync token still works and the
+	// changes since it are fetched again.
+	if quiet {
+		return 0, nil
 	}
 	return changed, s.save()
 }
@@ -558,7 +566,11 @@ func (s *Store) SetSyncError(calendarID string, err error, at time.Time) error {
 		return nil
 	}
 	c := s.calendar(calendarID)
+	same := c.LastError == err.Error()
 	c.LastError, c.LastErrorAt = err.Error(), at
+	if same { // the same failure again: no need to rewrite the file
+		return nil
+	}
 	return s.save()
 }
 
