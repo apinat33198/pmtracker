@@ -95,6 +95,8 @@ type findingData struct {
 	Chain    []core.FindingView // every finding in its repeat chain, oldest first
 	Form     findingForm
 	PickSite []core.Site // the first step of a new finding with no site yet
+	// Incidents are the incidents linked to the finding.
+	Incidents []core.IncidentView
 }
 
 // repeatChoices are the findings at a site that f could be a repeat of:
@@ -235,6 +237,7 @@ func (s *Server) renderFinding(w http.ResponseWriter, r *http.Request, code int,
 	d := findingData{V: v, Form: s.formFor(snap, form, false)}
 	d.Form.Error = msg
 	d.Chain = repeatChain(snap, v)
+	d.Incidents = snap.IncidentsLinkedTo(v.ID)
 	s.renderCode(w, r, code, "finding", "findings", fmt.Sprintf("Finding #%d at %s", v.ID, v.Site.Code), snap, d)
 }
 

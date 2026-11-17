@@ -213,3 +213,154 @@
 </form>
 <datalist id="finding-owner">{{range $f.Owners}}<option value="{{.}}">{{end}}</datalist>
 {{end}}
+
+{{/* A list of incidents. Expects dict "List" ([]core.IncidentView),
+   "Page", "Empty", "Current" (an incident number to highlight, or 0) and
+   optionally "ShowSite". */}}
+{{define "incidents"}}{{$p := .Page}}{{$show := .ShowSite}}{{$cur := .Current}}
+<table class="plain upcoming findings incidents">
+  <thead><tr><th scope="col">Happened</th><th scope="col">Incident</th><th scope="col">Risk</th><th scope="col">Status</th></tr></thead>
+  <tbody>
+  {{range .List}}
+    <tr class="s-{{.Tone}}{{if eq .ID $cur}} is-current{{end}}">
+      <td data-label="Happened"><span class="strong">{{date .At}}</span><span class="sub">{{if .Ongoing}}ongoing, {{.Age}} {{plural .Age "day" "days"}}{{else if .IsOpen}}open {{.Age}} {{plural .Age "day" "days"}}{{else}}closed after {{.Age}} {{plural .Age "day" "days"}}{{end}}</span></td>
+      <td data-label="Incident"><a class="task-name" href="/incidents/{{.ID}}">{{if $show}}<b>{{.Site.Code}}</b> {{end}}{{.Title}}</a><span class="sub">{{.Ref}}, {{if .IsNearMiss}}<span class="nm">near miss</span>, {{end}}{{if .HasTask}}{{$p.Cat.SystemName .Task.System}}{{else}}{{.CategoryLabel}}{{end}}{{if ge .RestoreMinutes 0}}, restored in {{minutes .RestoreMinutes}}{{end}}{{if .RepeatOf}}, <span class="warn">happened before</span>{{end}}{{with .Repeats}}, <span class="warn">happened again {{len .}}×</span>{{end}}</span></td>
+      <td data-label="Risk"><span class="risk s-{{.Risk.Tone}} risk-{{.Risk.Key}}">{{.Risk.Label}}</span><span class="sub">{{.Risk.Likelihood}} × {{.Risk.Consequence}} = {{.Risk.Score}}{{if .Residual.Rated}}, now <span class="risk-to s-{{.Residual.Tone}}">{{.Residual.Label}}</span>{{end}}</span></td>
+      <td data-label="Status"><span class="pill s-{{.Tone}}">{{.StatusLabel}}</span>{{if .IsOpen}}{{if .HasDue}}<span class="sub{{if .Late}} late{{end}}">target {{dm .DueDay}}{{if .Late}}, {{dueRel .DaysLeft}}{{end}}</span>{{end}}{{with .Owner}}<span class="sub">{{.}}</span>{{end}}{{else}}<span class="sub">{{.TreatmentLabel}}</span>{{end}}</td>
+    </tr>
+  {{else}}
+    <tr><td colspan="4" class="empty">{{.Empty}}</td></tr>
+  {{end}}
+  </tbody>
+</table>
+{{end}}
+
+{{/* The 5 × 5 risk matrix. Expects dict "Rows" ([]core.MatrixRow) and
+   "Link" (the address cells link to, before &l=&c=), or no Link. */}}
+{{define "riskMatrix"}}{{$link := .Link}}
+<table class="risk-matrix">
+  <caption class="visually-hidden">Incidents by likelihood and consequence</caption>
+  <thead><tr><th scope="col" class="axis"><span class="axis-long">Likelihood ↓ / Consequence →</span><span class="axis-short" aria-hidden="true">L ↓ C →</span></th>{{range consequenceScale}}<th scope="col" title="{{.Hint}}"><span class="lv">{{.N}}</span> {{.Label}}</th>{{end}}</tr></thead>
+  <tbody>
+  {{range .Rows}}{{$l := .Likelihood}}
+    <tr>
+      <th scope="row" title="{{$l.Hint}}"><span class="lv">{{$l.N}}</span> {{$l.Label}}</th>
+      {{range .Cells}}<td class="s-{{.Risk.Tone}} risk-{{.Risk.Key}}{{if not .Count}} is-zero{{end}}" title="{{.Risk.Text}}">{{if and .Count $link}}<a href="{{$link}}&amp;l={{.Risk.Likelihood}}&amp;c={{.Risk.Consequence}}">{{.Count}}</a>{{else if .Count}}{{.Count}}{{else}}<span aria-hidden="true">·</span>{{end}}</td>{{end}}
+    </tr>
+  {{end}}
+  </tbody>
+</table>
+{{end}}
+
+{{/* The rating scales and bands, as written in the risk criteria. */}}
+{{define "riskCriteria"}}
+<details class="criteria">
+  <summary>How to rate: the risk criteria</summary>
+  <div class="criteria-in">
+    <table class="plain compact">
+      <thead><tr><th scope="col">Consequence</th><th scope="col">For a DC or CSR room</th></tr></thead>
+      <tbody>{{range consequenceScale}}<tr><td><b>{{.N}}</b> {{.Label}}</td><td>{{.Hint}}</td></tr>{{end}}</tbody>
+    </table>
+    <table class="plain compact">
+      <thead><tr><th scope="col">Likelihood</th><th scope="col">Of it happening again, with nothing more done</th></tr></thead>
+      <tbody>{{range likelihoodScale}}<tr><td><b>{{.N}}</b> {{.Label}}</td><td>{{.Hint}}</td></tr>{{end}}</tbody>
+    </table>
+    <table class="plain compact">
+      <thead><tr><th scope="col">Likelihood × consequence</th><th scope="col">Calls for</th></tr></thead>
+      <tbody>{{range $i, $b := riskBands}}<tr><td><span class="risk s-{{$b.Tone}} risk-{{$b.Key}}">{{$b.Label}}</span> {{$b.Min}}{{if eq $b.Key "extreme"}} to 25{{else}} and up{{end}}</td><td>{{$b.Hint}}</td></tr>{{end}}</tbody>
+    </table>
+  </div>
+</details>
+{{end}}
+
+{{/* The add and edit form for an incident. Expects dict "Form" (an
+   incidentForm) and "Page". */}}
+{{define "incidentForm"}}{{$f := .Form}}{{$p := .Page}}{{$x := $f.I}}
+{{with $f.Error}}<p class="flash error" role="alert">{{.}}</p>{{end}}
+<form class="panel finding-form incident-form" method="post" action="{{if $f.New}}/incidents{{else}}/incidents/{{$x.ID}}{{end}}" data-bands="{{range $i, $b := riskBands}}{{if $i}},{{end}}{{$b.Min}}:{{$b.Label}}:{{$b.Tone}}{{end}}">
+  {{if $f.New}}<input type="hidden" name="site" value="{{$x.SiteID}}">{{end}}
+  <fieldset>
+    <legend>What happened</legend>
+    <div class="grid-4">
+      <label class="stack span-2">What happened, in a line <input name="title" value="{{$x.Title}}" required maxlength="200" placeholder="e.g. UPS 2 went to bypass after a power module fault"></label>
+      <label class="stack">Incident or near miss <select name="kind">{{range incidentKinds}}<option value="{{.Key}}"{{if eq .Key $x.Kind}} selected{{end}}>{{.Label}}</option>{{end}}</select><span class="field-hint">A near miss affected nothing, but could have</span></label>
+      <label class="stack">Kind <select name="category" required><option value="">Pick one</option>{{range incidentCategories}}<option value="{{.Key}}"{{if eq .Key $x.Category}} selected{{end}}>{{.Label}}</option>{{end}}</select></label>
+      <label class="stack">Happened at <input type="datetime-local" name="occurred" value="{{$x.Occurred}}" max="{{$f.Now}}" required></label>
+      <label class="stack">Noticed at <input type="datetime-local" name="detected" value="{{$x.Detected}}" max="{{$f.Now}}"><span class="field-hint">If later than it happened</span></label>
+      <label class="stack">Noticed through <select name="detected_by">{{range incidentDetections}}<option value="{{.Key}}"{{if eq .Key $x.DetectedBy}} selected{{end}}>{{.Label}}</option>{{end}}</select></label>
+      <label class="stack">System <select name="task"><option value="">None, or several</option>{{range $f.Tasks}}<option value="{{.ID}}"{{if eq .ID $x.TaskID}} selected{{end}}>{{$p.Cat.SystemName .System}} ({{$p.Cat.VendorName .Vendor}})</option>{{end}}</select></label>
+    </div>
+    <label class="stack">Details <textarea name="detail" rows="4" maxlength="4000" placeholder="What happened, in order: alarms, readings, what was affected and for how long">{{$x.Detail}}</textarea></label>
+  </fieldset>
+  <fieldset>
+    <legend>Risk assessment</legend>
+    <p class="field-hint lead">Rate the worst that could credibly have happened, not only what did: that is what makes a near miss worth logging. Likelihood is of it happening again if nothing more is done.</p>
+    <div class="grid-4">
+      <label class="stack">Actual impact <select name="impact" required><option value="">Pick one</option>{{range impactScale}}<option value="{{.N}}"{{if eq .N $x.Impact}}{{if or (ne .N 0) (eq $x.Kind "near_miss")}} selected{{end}}{{end}}>{{.N}} {{.Label}}</option>{{end}}</select><span class="field-hint">What actually happened; none for a near miss</span></label>
+      <label class="stack">Worst credible consequence <select name="consequence" required data-rate="c"><option value="">Pick one</option>{{range consequenceScale}}<option value="{{.N}}"{{if eq .N $x.Consequence}} selected{{end}}>{{.N}} {{.Label}}</option>{{end}}</select></label>
+      <label class="stack">Likelihood of happening again <select name="likelihood" required data-rate="l"><option value="">Pick one</option>{{range likelihoodScale}}<option value="{{.N}}"{{if eq .N $x.Likelihood}} selected{{end}}>{{.N}} {{.Label}}</option>{{end}}</select></label>
+      <div class="stack">Risk rating <output class="risk-live" data-rate-out>{{with riskOf $x.Likelihood $x.Consequence}}{{if .Rated}}<span class="risk s-{{.Tone}} risk-{{.Key}}">{{.Label}}</span> {{.Likelihood}} × {{.Consequence}} = {{.Score}}{{else}}Pick both{{end}}{{end}}</output></div>
+    </div>
+    {{template "riskCriteria"}}
+  </fieldset>
+  <fieldset>
+    <legend>Response</legend>
+    <div class="grid-4">
+      <label class="stack">Status <select name="status">{{range incidentStatuses}}<option value="{{.Key}}"{{if eq .Key $x.Status}} selected{{end}}>{{.Label}}</option>{{end}}</select></label>
+      <label class="stack">Service restored at <input type="datetime-local" name="restored" value="{{$x.Restored}}" max="{{$f.Now}}"><span class="field-hint">Needed from service restored on, for an incident</span></label>
+      <label class="stack">Who follows it up <input name="owner" value="{{$x.Owner}}" list="incident-owner" maxlength="100" placeholder="Person or vendor"></label>
+      <label class="stack">Target date <input type="date" name="due" value="{{$x.Due}}"><span class="field-hint">For the action to be in place</span></label>
+    </div>
+    <label class="stack">Containment and recovery <textarea name="response" rows="3" maxlength="4000" placeholder="What was done to stop it getting worse and to restore service, and when">{{$x.Response}}</textarea></label>
+  </fieldset>
+  <fieldset>
+    <legend>Learning and treatment</legend>
+    <label class="stack">Root cause <textarea name="cause" rows="2" maxlength="4000" placeholder="Ask why until you reach something you can fix">{{$x.Cause}}</textarea></label>
+    <label class="stack">Action <textarea name="action" rows="3" maxlength="4000" placeholder="The fix, and what changes so it doesn't happen again: PM checklist, contract, design, procedure">{{$x.Action}}</textarea><span class="field-hint">Corrective and preventive. Needed to close.</span></label>
+    <label class="stack">Lessons learned <textarea name="lessons" rows="2" maxlength="4000" placeholder="What the other sites and the team should know">{{$x.Lessons}}</textarea></label>
+    <div class="grid-4">
+      <label class="stack">Treatment <select name="treatment"><option value="">Not decided</option>{{range incidentTreatments}}<option value="{{.Key}}"{{if eq .Key $x.Treatment}} selected{{end}}>{{.Label}}</option>{{end}}</select><span class="field-hint">{{range $i, $c := incidentTreatments}}{{if $i}}; {{end}}{{$c.Label}}: {{$c.Hint}}{{end}}</span></label>
+      <label class="stack">Residual consequence <select name="residual_consequence" data-rate="rc"><option value="">Not rated</option>{{range consequenceScale}}<option value="{{.N}}"{{if eq .N $x.ResidualConsequence}} selected{{end}}>{{.N}} {{.Label}}</option>{{end}}</select></label>
+      <label class="stack">Residual likelihood <select name="residual_likelihood" data-rate="rl"><option value="">Not rated</option>{{range likelihoodScale}}<option value="{{.N}}"{{if eq .N $x.ResidualLikelihood}} selected{{end}}>{{.N}} {{.Label}}</option>{{end}}</select></label>
+      <div class="stack">Residual risk <output class="risk-live" data-rate-out="r">{{with riskOf $x.ResidualLikelihood $x.ResidualConsequence}}{{if .Rated}}<span class="risk s-{{.Tone}} risk-{{.Key}}">{{.Label}}</span> {{.Likelihood}} × {{.Consequence}} = {{.Score}}{{else}}Not rated yet{{end}}{{end}}</output><span class="field-hint">With the action in place. Needed to close.{{if not $f.CanAccept}} Closing with it still high or extreme accepts the risk, so an admin has to.{{end}}</span></div>
+      <label class="stack">Closed on <input type="date" name="closed_on" value="{{$x.ClosedOn}}" max="{{iso $f.Today}}"><span class="field-hint">When closing it; empty means today</span></label>
+      <label class="stack span-2">Linked finding <select name="finding"><option value="">None</option>{{range $f.Findings}}<option value="{{.ID}}"{{if eq .ID $x.FindingID}} selected{{end}}>#{{.ID}}, {{date .Found}}: {{.Title}} ({{.StatusLabel}})</option>{{end}}</select><span class="field-hint">A finding at this site that warned of it, or came out of it</span></label>
+      <label class="stack">Repeat of <select name="repeat_of"><option value="">Not a repeat</option>{{range $f.Repeats}}<option value="{{.ID}}"{{if eq .ID $x.RepeatOf}} selected{{end}}>{{.Ref}}, {{date .At}}: {{.Title}}</option>{{end}}</select></label>
+    </div>
+  </fieldset>
+  {{if not $f.New}}
+  <fieldset>
+    <legend>Update for the timeline</legend>
+    <label class="stack">What's happened since <textarea name="note" rows="2" maxlength="2000" placeholder="Optional. Changes to the fields above are recorded on their own."></textarea></label>
+  </fieldset>
+  {{end}}
+  <button>{{if $f.New}}Log incident{{else}}Save{{end}}</button>
+</form>
+<datalist id="incident-owner">{{range $f.Owners}}<option value="{{.}}">{{end}}</datalist>
+<script>
+// Show the risk rating as the likelihood and consequence are picked.
+(function () {
+  var form = document.currentScript.previousElementSibling.previousElementSibling;
+  if (!form || !form.dataset.bands) return;
+  var bands = form.dataset.bands.split(",").map(function (b) { var p = b.split(":"); return { min: +p[0], label: p[1], tone: p[2] }; });
+  function show(out, l, c, none) {
+    var lv = +l.value, cv = +c.value;
+    if (!lv || !cv) { out.textContent = none; return; }
+    var score = lv * cv, band = bands[0];
+    bands.forEach(function (b) { if (score >= b.min) band = b; });
+    out.innerHTML = "";
+    var pill = document.createElement("span");
+    pill.className = "risk s-" + band.tone + " risk-" + band.label.toLowerCase();
+    pill.textContent = band.label;
+    out.append(pill, " " + lv + " × " + cv + " = " + score);
+  }
+  var q = function (k) { return form.querySelector('[data-rate="' + k + '"]'); };
+  var outs = form.querySelectorAll("[data-rate-out]");
+  function update() {
+    show(outs[0], q("l"), q("c"), "Pick both");
+    show(outs[1], q("rl"), q("rc"), "Not rated yet");
+  }
+  form.addEventListener("change", function (e) { if (e.target.dataset && e.target.dataset.rate) update(); });
+})();
+</script>
+{{end}}

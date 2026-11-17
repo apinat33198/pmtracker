@@ -84,6 +84,7 @@ type Inputs struct {
 	Changes   []Change
 	Jobs      []Job
 	Findings  []Finding
+	Incidents []Incident
 }
 
 // MatchClass says how sure the matcher is that an event is a PM visit.

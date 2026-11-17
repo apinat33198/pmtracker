@@ -30,6 +30,14 @@
 {{template "findings" (dict "List" $d.Findings "Page" . "Empty" "No findings from this PM task yet." "Current" 0)}}
 {{if $d.More}}<p class="hint small"><a href="/findings?site={{$f.Site.ID}}&amp;status=all">{{$d.More}} more at this site</a></p>{{end}}
 
+{{with $d.Incidents}}
+<h2 id="incidents">Incidents</h2>
+<p class="hint">Failures and near misses involving this system.</p>
+{{template "incidents" (dict "List" . "Page" $ "Empty" "" "Current" 0)}}
+{{if $d.MoreIncidents}}<p class="hint small"><a href="/incidents?site={{$f.Site.ID}}&amp;status=all">{{$d.MoreIncidents}} more at this site</a></p>{{end}}
+{{end}}
+{{if .IsEditor}}<p class="hint small"><a href="/incidents/new?task={{$f.Task.ID}}">Log an incident</a> involving this system.</p>{{end}}
+
 <h2>Visits</h2>
 {{template "visits" (dict "Visits" $f.Visits "Page" . "ShowTasks" false)}}
 

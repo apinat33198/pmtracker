@@ -1,0 +1,88 @@
+{{define "content"}}{{$d := .Data}}{{$st := $d.Stats}}
+<section class="page-head with-tools">
+  <div>
+    <h1>Incidents{{with $d.SiteName}} at {{.}}{{end}}</h1>
+    <p class="lede">Power and cooling failures, leaks, alarms and near misses, rated by what could have happened and how likely it is to happen again, then treated and re-rated (ISO 31000). Incidents don't change any PM date or status.</p>
+  </div>
+  <div class="tools">{{if .IsEditor}}<a class="button" href="{{$d.NewLink}}">Log an incident</a>{{end}}<a class="button ghost" href="/incidents.csv">Export CSV</a></div>
+</section>
+
+<dl class="kpis" aria-label="Measures">
+  <div{{if $st.Ongoing}} class="s-overdue"{{else if $st.OpenHigh}} class="s-due_soon"{{end}}><dt>Open</dt><dd class="kpi">{{$st.Open}}</dd><dd class="sub">{{$st.Ongoing}} still being contained, {{$st.OpenHigh}} high or extreme</dd></div>
+  <div{{if $st.Late}} class="s-overdue"{{end}}><dt>Actions past target</dt><dd class="kpi">{{$st.Late}}</dd><dd class="sub">open past the date agreed for the action</dd></div>
+  <div><dt>Time to restore</dt><dd class="kpi">{{minutes $st.MedianRestore}}</dd><dd class="sub">median of {{$st.Restored}} {{plural $st.Restored "incident" "incidents"}} since {{dm $d.Since}}</dd></div>
+  <div><dt>Days to close</dt><dd class="kpi">{{days $st.MedianClose}}</dd><dd class="sub">median of {{$st.Closed}} closed since {{dm $d.Since}}</dd></div>
+  <div><dt>Near misses per incident</dt><dd class="kpi">{{$st.NearMissRatio}}</dd><dd class="sub">{{$st.NearMisses}} near {{plural $st.NearMisses "miss" "misses"}}, {{$st.Incidents}} {{plural $st.Incidents "incident" "incidents"}} since {{dm $d.Since}}</dd></div>
+  <div{{if $st.Repeats}} class="s-off_cycle"{{end}}><dt>Happened again</dt><dd class="kpi">{{pct $st.RepeatShare}}</dd><dd class="sub">{{$st.Repeats}} {{plural $st.Repeats "repeat" "repeats"}} since {{dm $d.Since}}; {{pct $st.AlarmShare}} noticed by an alarm</dd></div>
+</dl>
+
+<section class="matrix-wrap" aria-labelledby="matrix-h">
+  <div>
+    <h2 id="matrix-h">Risk matrix</h2>
+    <p class="hint">Open incidents, and those since {{date $d.Since}}, at their current rating: residual once the action is in, otherwise as assessed. Treatment should move them down and left. Pick a number to list them.</p>
+    {{template "riskCriteria"}}
+  </div>
+  {{template "riskMatrix" (dict "Rows" $d.Matrix "Link" $d.CellLink)}}
+</section>
+
+<form class="filters" method="get" action="/incidents">
+  <label>Site <select name="site"><option value="">All sites</option>{{range $d.Sites}}<option value="{{.ID}}"{{if eq .ID $d.Filter.Site}} selected{{end}}>{{.Code}} {{.Name}}</option>{{end}}</select></label>
+  <label>Status <select name="status">
+    <option value="open"{{if eq $d.Filter.Status "open"}} selected{{end}}>Open</option>
+    <option value="closed"{{if eq $d.Filter.Status "closed"}} selected{{end}}>Closed</option>
+    <option value="all"{{if eq $d.Filter.Status "all"}} selected{{end}}>All</option>
+  </select></label>
+  <label>Type <select name="kind"><option value="">Both</option>{{range incidentKinds}}<option value="{{.Key}}"{{if eq .Key $d.Filter.Kind}} selected{{end}}>{{.Label}}</option>{{end}}</select></label>
+  <label>Kind <select name="category"><option value="">Any</option>{{range incidentCategories}}<option value="{{.Key}}"{{if eq .Key $d.Filter.Category}} selected{{end}}>{{.Label}}</option>{{end}}</select></label>
+  <label>Current risk <select name="risk"><option value="">Any</option>{{range riskBands}}<option value="{{.Key}}"{{if eq .Key $d.Filter.Risk}} selected{{end}}>{{.Label}}</option>{{end}}</select></label>
+  {{if $d.Filter.L}}<input type="hidden" name="l" value="{{$d.Filter.L}}"><input type="hidden" name="c" value="{{$d.Filter.C}}">{{end}}
+  <button class="ghost">Apply</button>
+  {{if $d.Filtered}}<a href="/incidents">Clear filters</a>{{end}}
+</form>
+{{if $d.Filter.L}}<p class="hint small">Showing the matrix cell likelihood {{$d.Filter.L}} × consequence {{$d.Filter.C}}.</p>{{end}}
+
+{{template "incidents" (dict "List" $d.List "Page" . "ShowSite" (not $d.Filter.Site) "Empty" "No incidents match these filters." "Current" 0)}}
+{{if $d.More}}<p class="hint small">Showing the first {{len $d.List}}. The CSV has all {{add (len $d.List) $d.More}}.</p>{{end}}
+
+{{with $d.ByCategory}}
+<h2>By kind</h2>
+<p class="hint">Open incidents and those since {{date $d.Since}}, by where the risk comes from. Time to restore is the median for incidents with a restore time.</p>
+<table class="plain vendors finding-groups">
+  <thead><tr><th scope="col">Kind</th><th scope="col" class="num">Incidents</th><th scope="col" class="num">Near misses</th><th scope="col" class="num">Open</th><th scope="col" class="num">High or extreme</th><th scope="col" class="num">Repeats</th><th scope="col" class="num">Time to restore</th></tr></thead>
+  <tbody>
+  {{range .}}{{$g := .Stats}}
+    <tr>
+      <td data-label="Kind"><a href="/incidents?category={{.Key}}&amp;status=all{{with $d.Filter.Site}}&amp;site={{.}}{{end}}">{{.Name}}</a></td>
+      <td data-label="Incidents" class="num">{{$g.Incidents}}</td>
+      <td data-label="Near misses" class="num">{{$g.NearMisses}}</td>
+      <td data-label="Open" class="num">{{if $g.Open}}<span class="n s-booked">{{$g.Open}}</span>{{else}}<span class="zero">0</span>{{end}}</td>
+      <td data-label="High or extreme" class="num">{{if $g.OpenHigh}}<span class="n s-overdue">{{$g.OpenHigh}}</span>{{else}}<span class="zero">0</span>{{end}}</td>
+      <td data-label="Repeats" class="num">{{if $g.Repeats}}<span class="n s-off_cycle">{{$g.Repeats}}</span>{{else}}<span class="zero">0</span>{{end}}</td>
+      <td data-label="Time to restore" class="num">{{minutes $g.MedianRestore}}</td>
+    </tr>
+  {{end}}
+  </tbody>
+</table>
+{{end}}
+
+{{with $d.BySite}}
+<h2>By site</h2>
+<p class="hint">Sites with an open incident, or one since {{date $d.Since}}. A site where the same thing keeps happening needs its root cause treated, not more recoveries.</p>
+<table class="plain vendors finding-groups">
+  <thead><tr><th scope="col">Site</th><th scope="col" class="num">Incidents</th><th scope="col" class="num">Near misses</th><th scope="col" class="num">Open</th><th scope="col" class="num">High or extreme</th><th scope="col" class="num">Repeats</th><th scope="col" class="num">Time to restore</th></tr></thead>
+  <tbody>
+  {{range .}}{{$g := .Stats}}
+    <tr>
+      <td data-label="Site"><a href="/incidents?site={{.Key}}&amp;status=all"><b>{{.Code}}</b> {{.Name}}</a></td>
+      <td data-label="Incidents" class="num">{{$g.Incidents}}</td>
+      <td data-label="Near misses" class="num">{{$g.NearMisses}}</td>
+      <td data-label="Open" class="num">{{if $g.Open}}<span class="n s-booked">{{$g.Open}}</span>{{else}}<span class="zero">0</span>{{end}}</td>
+      <td data-label="High or extreme" class="num">{{if $g.OpenHigh}}<span class="n s-overdue">{{$g.OpenHigh}}</span>{{else}}<span class="zero">0</span>{{end}}</td>
+      <td data-label="Repeats" class="num">{{if $g.Repeats}}<span class="n s-off_cycle">{{$g.Repeats}}</span>{{else}}<span class="zero">0</span>{{end}}</td>
+      <td data-label="Time to restore" class="num">{{minutes $g.MedianRestore}}</td>
+    </tr>
+  {{end}}
+  </tbody>
+</table>
+{{end}}
+{{end}}

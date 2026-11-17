@@ -57,6 +57,10 @@ type Snapshot struct {
 	// Findings are open ones (most serious first), then closed ones.
 	Findings     []FindingView
 	OpenFindings int
+	// Incidents are open ones (still happening, then highest risk first),
+	// then closed ones.
+	Incidents     []IncidentView
+	OpenIncidents int
 }
 
 func (s Snapshot) Forecast(task string) (Forecast, bool) {
@@ -251,6 +255,12 @@ func Build(cfg *config.Config, in Inputs, now time.Time) Snapshot {
 			snap.OpenFindings++
 		}
 	}
+	snap.Incidents = buildIncidents(&cat, in.Incidents, today, loc)
+	for _, v := range snap.Incidents {
+		if v.IsOpen() {
+			snap.OpenIncidents++
+		}
+	}
 	return snap
 }
 
@@ -334,6 +344,23 @@ func Digest(s Snapshot, baseURL string) string {
 	}
 	if len(findings) > 0 {
 		fmt.Fprintf(&b, "Findings past their target date (%d)\n%s\n\n", len(findings), strings.Join(findings, "\n"))
+	}
+	var incidents []string
+	for _, v := range s.Incidents {
+		if !v.IsOpen() || (!v.Ongoing() && !v.Late() && !v.Risk.AtLeastHigh()) {
+			continue
+		}
+		line := fmt.Sprintf("• %s %s %s (%s, %s risk)", v.Site.Code, v.Ref, v.Title, strings.ToLower(v.StatusLabel()), strings.ToLower(v.Risk.Label()))
+		if v.HasDue() {
+			line += ": action " + dueText(v.DaysLeft)
+		}
+		if v.Owner != "" {
+			line += " (" + v.Owner + ")"
+		}
+		incidents = append(incidents, line)
+	}
+	if len(incidents) > 0 {
+		fmt.Fprintf(&b, "Incidents needing attention (%d)\n%s\n\n", len(incidents), strings.Join(incidents, "\n"))
 	}
 	if n := len(s.Inbox); n == 1 {
 		b.WriteString("Review inbox: 1 event needs a decision\n")

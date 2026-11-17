@@ -257,6 +257,18 @@ func (s *Server) adminDeleteSite(w http.ResponseWriter, r *http.Request) {
 		s.redirect(w, r, "/admin/sites/"+id, fmt.Sprintf("Type %s to confirm deleting the site.", site.Code), "error")
 		return
 	}
+	// Incidents are audit evidence: a site that has any is archived, not deleted.
+	incidents := 0
+	for _, in := range s.Store.Inputs().Incidents {
+		if in.SiteID == id {
+			incidents++
+		}
+	}
+	if incidents > 0 {
+		s.redirect(w, r, "/admin/sites/"+id, fmt.Sprintf("%s has %d %s on record, which are audit evidence. Archive the site instead: it leaves the overview and the incidents are kept.",
+			site.Code, incidents, plural(incidents, "incident", "incidents")), "error")
+		return
+	}
 	n := len(cat.TasksAt(id))
 	err := s.Store.UpdateCatalog(userOf(r).Name, fmt.Sprintf("Deleted site %s %s and its %d PM tasks", site.Code, site.Name, n), func(c *core.Catalog) error {
 		var sites []core.Site

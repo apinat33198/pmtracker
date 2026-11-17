@@ -311,6 +311,14 @@ func demoSeed(ctx context.Context, sy *gcal.Syncer, st *store.Store, cfg *config
 			log.Printf("demo: %v", err)
 		}
 	}
+	if len(st.Inputs().Incidents) == 0 {
+		err := demo.SeedIncidents(st.Catalog(), st.Inputs().Findings, now(), cfg.Location(), func(in core.Incident) (core.Incident, error) {
+			return st.AddIncident(in, func(core.Incident) string { return "" })
+		})
+		if err != nil {
+			log.Printf("demo: %v", err)
+		}
+	}
 }
 
 // check verifies credentials and calendar access without touching the store.

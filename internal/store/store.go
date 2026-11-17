@@ -16,6 +16,7 @@ import (
 	"sort"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/apinat33198/pmtracker/internal/auth"
 	"github.com/apinat33198/pmtracker/internal/core"
@@ -53,6 +54,9 @@ type state struct {
 	Jobs []core.Job `json:"jobs,omitempty"`
 	// Findings are things found at sites, followed until closed.
 	Findings []core.Finding `json:"findings,omitempty"`
+	// Incidents are unplanned events and near misses, with their risk
+	// ratings and timelines.
+	Incidents []core.Incident `json:"incidents,omitempty"`
 	// Audit is where the activity log was kept before it moved to its own
 	// files; read once to move old entries over, then always empty.
 	Audit  []AuditEntry `json:"audit,omitempty"`
@@ -75,8 +79,10 @@ type Store struct {
 	Logf func(format string, args ...any)
 }
 
-// currentVersion is the data file's format version.
-const currentVersion = 2
+// currentVersion is the data file's format version. 3 added incidents; an
+// older tracker refuses to restore a backup that has them, with a message
+// saying so, instead of dropping them.
+const currentVersion = 3
 
 // Open loads path, or starts empty if it does not exist.
 func Open(path string) (*Store, error) {
@@ -93,6 +99,9 @@ func Open(path string) (*Store, error) {
 		}
 	}
 	s.st.normalize()
+	if s.st.Version < currentVersion {
+		s.st.Version = currentVersion
+	}
 	s.Logf = log.Printf
 	act, err := openActivity(ActivityDir(path), func() time.Time { return s.now() })
 	if err != nil {
@@ -144,10 +153,65 @@ func (st *state) normalize() {
 	for _, f := range st.Findings {
 		high = max(high, f.ID)
 	}
+	for _, in := range st.Incidents {
+		high = max(high, in.ID)
+	}
 	if st.NextID <= high {
 		st.NextID = high + 1
 	}
 	st.tidyFindings()
+	st.tidyIncidents()
+}
+
+// tidyIncidents keeps incidents in step with the catalog and the findings:
+// a deleted site's incidents go with it (the admin pages refuse to delete a
+// site that has any), a deleted PM task's incidents stay at the site, and
+// links to a finding or an incident that's gone are dropped.
+func (st *state) tidyIncidents() {
+	findings := map[int]string{}
+	for _, f := range st.Findings {
+		findings[f.ID] = f.SiteID
+	}
+	var out []core.Incident
+	ids := map[int]bool{}
+	for _, in := range st.Incidents {
+		if _, ok := st.Catalog.Site(in.SiteID); !ok {
+			continue
+		}
+		if t, ok := st.Catalog.Task(in.TaskID); in.TaskID != "" && (!ok || t.SiteID != in.SiteID) {
+			in.TaskID = ""
+		}
+		if site, ok := findings[in.FindingID]; in.FindingID != 0 && (!ok || site != in.SiteID) {
+			in.FindingID = 0
+		}
+		out = append(out, in)
+		ids[in.ID] = true
+	}
+	for i := range out {
+		if !ids[out[i].RepeatOf] {
+			out[i].RepeatOf = 0
+		}
+	}
+	st.Incidents = out
+}
+
+// checkIncidents reports the first incident in a backup that doesn't check out.
+func checkIncidents(list []core.Incident) error {
+	seen, refs := map[int]bool{}, map[string]bool{}
+	for i := range list {
+		in := &list[i]
+		if in.ID < 1 || seen[in.ID] {
+			return fmt.Errorf("two incidents share the number %d", in.ID)
+		}
+		if in.Ref == "" || refs[in.Ref] {
+			return fmt.Errorf("incident #%d has no reference, or shares %q with another", in.ID, in.Ref)
+		}
+		seen[in.ID], refs[in.Ref] = true, true
+		if err := in.Clean(); err != nil {
+			return fmt.Errorf("incident %s: %v", in.Ref, err)
+		}
+	}
+	return nil
 }
 
 // tidyFindings keeps findings in step with the catalog: a deleted site's
@@ -243,6 +307,9 @@ func (s *Store) Restore(b []byte, by, action string) error {
 	if err := checkFindings(st.Findings); err != nil {
 		return fmt.Errorf("the backup's findings don't check out: %v", err)
 	}
+	if err := checkIncidents(st.Incidents); err != nil {
+		return fmt.Errorf("the backup's incidents don't check out: %v", err)
+	}
 	st.normalize()
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -262,6 +329,7 @@ func (s *Store) Restore(b []byte, by, action string) error {
 		st.Users[i].Epoch++
 	}
 	st.Demo = s.st.Demo
+	st.Version = currentVersion
 	st.Audit = nil // the activity log isn't part of the data, and a restore can't rewrite it
 	prev := s.st
 	s.st = st
@@ -414,6 +482,7 @@ func (s *Store) cleanup() {
 	}
 	s.st.Jobs = jobs
 	s.st.tidyFindings()
+	s.st.tidyIncidents()
 
 	cals := map[string]bool{}
 	for _, c := range s.st.Catalog.Calendars {
@@ -444,6 +513,7 @@ func (s *Store) Inputs() core.Inputs {
 		Changes:   append([]core.Change(nil), s.st.Changes...),
 		Jobs:      append([]core.Job(nil), s.st.Jobs...),
 		Findings:  append([]core.Finding(nil), s.st.Findings...),
+		Incidents: append([]core.Incident(nil), s.st.Incidents...),
 	}
 	for _, e := range s.st.Events {
 		in.Events = append(in.Events, e)
@@ -837,15 +907,133 @@ func (s *Store) DeleteFinding(id int, by string, action func(core.Finding) strin
 				next[k].RepeatOf = 0
 			}
 		}
+		prevIncidents := s.st.Incidents
 		s.st.Findings = next
+		s.st.tidyIncidents() // incidents linked to it lose the link
 		s.audit(by, action(f))
 		if err := s.save(); err != nil {
-			s.st.Findings = prev
+			s.st.Findings, s.st.Incidents = prev, prevIncidents
 			return f, err
 		}
 		return f, nil
 	}
 	return core.Finding{}, ErrNoFinding
+}
+
+// ErrNoIncident means the incident doesn't exist (any more).
+var ErrNoIncident = errors.New("that incident no longer exists")
+
+// ErrNoChange means an update changed nothing and added no note.
+var ErrNoChange = errors.New("nothing was changed")
+
+// AddIncident checks and saves a new incident, and returns it with its
+// number and reference. The timeline starts empty: the incident's own
+// creation time and author are its first entry.
+func (s *Store) AddIncident(in core.Incident, action func(core.Incident) string) (core.Incident, error) {
+	in.Notes = nil
+	if err := in.Clean(); err != nil {
+		return core.Incident{}, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	in.ID = s.st.NextID
+	if err := in.CheckLinks(&s.st.Catalog, s.st.Findings, s.st.Incidents); err != nil {
+		return core.Incident{}, err
+	}
+	occurred, _ := time.Parse(core.IncidentTime, in.Occurred)
+	in.Ref = core.NextIncidentRef(s.st.Incidents, occurred.Year())
+	s.st.NextID++
+	s.st.Incidents = append(s.st.Incidents, in)
+	if a := action(in); a != "" {
+		s.audit(in.By, a)
+	}
+	if err := s.save(); err != nil {
+		s.st.Incidents = s.st.Incidents[:len(s.st.Incidents)-1]
+		s.st.NextID--
+		return core.Incident{}, err
+	}
+	return in, nil
+}
+
+// UpdateIncident applies fn to a copy of an incident, checks it, adds what
+// changed and note (if any) to its timeline as one entry, and saves it.
+// The incident keeps its site, number, reference and timeline whatever fn
+// does. ErrNoChange means fn changed nothing and note is empty.
+func (s *Store) UpdateIncident(id int, by, note string, action func(old, in core.Incident) string, fn func(*core.Incident) error) (core.Incident, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i, old := range s.st.Incidents {
+		if old.ID != id {
+			continue
+		}
+		in := old
+		in.Notes = nil
+		if err := fn(&in); err != nil {
+			return old, err
+		}
+		in.ID, in.Ref, in.SiteID, in.By, in.Created = old.ID, old.Ref, old.SiteID, old.By, old.Created
+		in.Notes = old.Notes
+		if err := in.Clean(); err != nil {
+			return old, err
+		}
+		if err := in.CheckLinks(&s.st.Catalog, s.st.Findings, s.st.Incidents); err != nil {
+			return old, err
+		}
+		entry, err := s.incidentNote(old, by, note, core.IncidentChanges(old, in, &s.st.Catalog))
+		if err != nil {
+			return old, err
+		}
+		in.Notes = append(append([]core.IncidentNote(nil), old.Notes...), entry)
+		s.st.Incidents[i] = in
+		s.audit(by, action(old, in))
+		if err := s.save(); err != nil {
+			s.st.Incidents[i] = old
+			return old, err
+		}
+		return in, nil
+	}
+	return core.Incident{}, ErrNoIncident
+}
+
+// incidentNote makes a timeline entry, refusing an empty one or a full timeline.
+func (s *Store) incidentNote(in core.Incident, by, text string, changes []string) (core.IncidentNote, error) {
+	n := core.IncidentNote{At: s.now(), By: by, Changes: changes, Text: core.NoteText(text)}
+	switch {
+	case len(changes) == 0 && n.Text == "":
+		return n, ErrNoChange
+	case utf8.RuneCountInString(n.Text) > core.MaxNoteText:
+		return n, fmt.Errorf("keep the update under %d characters", core.MaxNoteText)
+	case len(in.Notes) >= core.MaxIncidentNotes:
+		return n, fmt.Errorf("this incident's timeline is full (%d entries); close it, and log anything new as a repeat", core.MaxIncidentNotes)
+	}
+	return n, nil
+}
+
+// DeleteIncident removes an incident and returns what it was. Incidents
+// that were recorded as repeats of it are kept, without the link.
+func (s *Store) DeleteIncident(id int, by string, action func(core.Incident) string) (core.Incident, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i, in := range s.st.Incidents {
+		if in.ID != id {
+			continue
+		}
+		prev := s.st.Incidents
+		next := append(append([]core.Incident(nil), prev[:i]...), prev[i+1:]...)
+		for k := range next {
+			if next[k].RepeatOf == id {
+				next[k].RepeatOf = 0
+			}
+		}
+		s.st.Incidents = next
+		s.audit(by, action(in))
+		if err := s.save(); err != nil {
+			s.st.Incidents = prev
+			return in, err
+		}
+		return in, nil
+	}
+	return core.Incident{}, ErrNoIncident
 }
 
 // Users returns the accounts stored in the data file.

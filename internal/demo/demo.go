@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -436,6 +437,131 @@ func SeedFindings(cat core.Catalog, now time.Time, loc *time.Location, add func(
 		saved, err := add(s.Finding)
 		if err != nil {
 			return fmt.Errorf("demo finding %q: %w", s.Title, err)
+		}
+		ids[i] = saved.ID
+	}
+	return nil
+}
+
+// SeedIncidents adds incidents and near misses around today through add:
+// one still being dealt with, others restored and waiting on their cause,
+// closed ones re-rated after treatment (one accepted while still high), a
+// utility outage that happened again, and the CNX1 CRAC that the findings
+// kept warning about finally tripping. findings are the demo findings, to
+// link that one to.
+func SeedIncidents(cat core.Catalog, findings []core.Finding, now time.Time, loc *time.Location, add func(core.Incident) (core.Incident, error)) error {
+	at := func(days, hour, min int) string {
+		return core.Day(now, loc).AddDate(0, 0, days).Add(time.Duration(hour)*time.Hour + time.Duration(min)*time.Minute).Format(core.IncidentTime)
+	}
+	date := func(days int) string { return core.Day(now, loc).AddDate(0, 0, days).Format("2006-01-02") }
+	task := func(site, system string) string {
+		for _, t := range cat.TasksAt(site) {
+			if t.System == system {
+				return t.ID
+			}
+		}
+		return ""
+	}
+	finding := func(site, title string) int {
+		for _, f := range findings {
+			if f.SiteID == site && strings.HasPrefix(f.Title, title) {
+				return f.ID
+			}
+		}
+		return 0
+	}
+	in := func(site, system, kind, category, title, occurred, by string, impact, consequence, likelihood int) core.Incident {
+		logged, _ := time.ParseInLocation(core.IncidentTime, occurred, loc)
+		return core.Incident{SiteID: site, TaskID: task(site, system), Kind: kind, Category: category, Title: title, Occurred: occurred,
+			DetectedBy: by, Impact: impact, Consequence: consequence, Likelihood: likelihood, Status: core.IncidentOpen,
+			By: "demo", Created: logged.Add(25 * time.Minute)}
+	}
+	with := func(x core.Incident, mod func(*core.Incident)) core.Incident { mod(&x); return x }
+	closed := func(x core.Incident, on, treatment string, rl, rc int) core.Incident {
+		x.Status, x.ClosedOn, x.ClosedBy, x.Treatment, x.ResidualLikelihood, x.ResidualConsequence = core.IncidentClosed, on, "demo", treatment, rl, rc
+		return x
+	}
+	type seed struct {
+		core.Incident
+		repeat int // index of the incident in this list it repeats, plus one
+	}
+	seeds := []seed{
+		{Incident: closed(with(in("bkk1", "genset", core.IncidentKind, "power", "Utility outage: generator took the load for 47 minutes", at(-150, 14, 12), "alarm", 2, 5, 3), func(x *core.Incident) {
+			x.Restored = at(-150, 14, 59)
+			x.Detail = "PEA feeder trip. UPS carried the load for 38 s until the generator came on; ran 47 min until utility power was stable. No IT impact, but the room was on one source with no redundancy."
+			x.Response = "Facility team on site within 20 minutes; watched fuel and generator temperatures; switched back to utility at 14:59."
+			x.Cause = "Feeder fault on the PEA side. The 38 s generator start is longer than it should be: the start battery was weak."
+			x.Action = "Generator start battery replaced. Monthly no-load test added to the PowerGen contract, with start time recorded."
+			x.Lessons = "Record the generator start time at every test; a creeping start time is an early warning."
+			x.Owner, x.Due = "PowerGen Siam", date(-130)
+		}), date(-128), "reduce", 3, 3)},
+		{Incident: with(in("bkk1", "genset", core.IncidentKind, "power", "Utility outage again: 12 minutes on generator", at(-20, 9, 40), "alarm", 2, 5, 3), func(x *core.Incident) {
+			x.Restored = at(-20, 9, 52)
+			x.Status = core.IncidentRestored
+			x.Detail = "Second PEA feeder trip this year. Generator started in 9 s and carried the load for 12 minutes."
+			x.Response = "Back on utility at 09:52. Fuel topped up."
+			x.Owner, x.Due = "Facility manager", date(10)
+		}), repeat: 1},
+		{Incident: with(in("cnx1", "crac", core.IncidentKind, "cooling", "CRAC 1 tripped on high pressure; room reached 29 °C", at(-3, 2, 15), "alarm", 3, 4, 4), func(x *core.Incident) {
+			x.Detected, x.Restored = at(-3, 2, 22), at(-3, 4, 5)
+			x.Status = core.IncidentRestored
+			x.Detail = "Night trip. CRAC 2 alone couldn't hold the room: 29 °C at the rack inlets by 03:30. Two servers throttled."
+			x.Response = "On-call opened the room doors and set up a portable fan; Northern Cooling reset CRAC 1 at 04:05 and cleaned the condenser."
+			x.Cause = "Dust from the building site next door clogs the condenser. The findings logged it three times; cleaning never treated the cause."
+			x.Owner, x.Due = "Northern Cooling", date(7)
+			x.FindingID = finding("cnx1", "CRAC 1 high-pressure alarm, third")
+		})},
+		{Incident: with(in("sri1", "ups", core.IncidentKind, "power", "UPS on bypass after a power module fault", at(-1, 16, 30), "alarm", 2, 5, 4), func(x *core.Incident) {
+			x.Status = core.IncidentContain
+			x.Detail = "Module 2 faulted and the UPS transferred to bypass. The IT load is on raw utility power with no battery behind it."
+			x.Response = "ABC Power confirmed the fault remotely; spare module on its way from Bangkok. Generator on standby; no changes in the room until it's fixed."
+			x.Owner, x.Due = "ABC Power", date(1)
+		})},
+		{Incident: with(in("bkk2", "crac", core.NearMiss, "water", "Condensate tray overflowing under CRAC 3, a metre from a PDU", at(-6, 10, 5), "staff", 0, 4, 3), func(x *core.Incident) {
+			x.Status = core.IncidentContain
+			x.Detail = "Found on a walk round. Water had spread about 1.5 m across the raised floor towards the PDU of rack C4."
+			x.Response = "Water cleared, floor tiles lifted to check below, drain unblocked by hand. Leak detection cable to be added along the CRAC row."
+			x.Cause = "Condensate drain blocked; there's no leak detection under the CRACs."
+			x.Owner, x.Due = "CoolAir Services", date(-1)
+		})},
+		{Incident: closed(with(in("hkt1", "", core.IncidentKind, "fire", "VESDA pre-alarm during ceiling work", at(-45, 11, 20), "alarm", 1, 3, 3), func(x *core.Incident) {
+			x.Restored = at(-45, 11, 35)
+			x.Detail = "Contractor drilling in the ceiling void raised dust; VESDA went to pre-alarm. No discharge."
+			x.Response = "Work stopped, dust cleared, VESDA reset."
+			x.Cause = "Work in the room without a permit, so nobody isolated the VESDA zone or covered the detectors."
+			x.Action = "Permit-to-work for any work in the rooms, with VESDA isolation and detector covers. Briefed to all contractors."
+			x.Owner, x.Due = "Facility team", date(-30)
+		}), date(-32), "reduce", 1, 3)},
+		{Incident: closed(with(in("kkc1", "", core.IncidentKind, "access", "CSR door left unlocked overnight", at(-70, 18, 0), "staff", 1, 4, 2), func(x *core.Incident) {
+			x.Detected, x.Restored = at(-69, 8, 10), at(-69, 8, 12)
+			x.Detail = "Found unlocked by the morning shift. Access log and CCTV showed nobody went in."
+			x.Cause = "The door closer was weak, so the door didn't latch behind the last person out."
+			x.Action = "Door closer replaced. Door-held-open alarm added to the access system."
+			x.Owner = "Facility team"
+		}), date(-60), "reduce", 1, 2)},
+		{Incident: closed(with(in("nma1", "dc", core.NearMiss, "human", "Wrong breaker label in the DC distribution panel", at(-35, 13, 0), "pm", 0, 4, 2), func(x *core.Incident) {
+			x.Detail = "During the PM, VoltEdge found breaker 14 labelled as rack B2's feed; it feeds B3. Caught before anyone switched it."
+			x.Cause = "Labels not updated when racks were moved last year."
+			x.Action = "Panel re-labelled and checked against the single-line diagram. Label check added to the PM checklist at all sites."
+			x.Lessons = "Check labels against the diagram before switching anything, every time."
+		}), date(-30), "reduce", 1, 4)},
+		{Incident: closed(with(in("hdy1", "", core.IncidentKind, "power", "Area-wide outage longer than the generator's fuel", at(-95, 20, 0), "alarm", 4, 5, 3), func(x *core.Incident) {
+			x.Restored = at(-94, 2, 30)
+			x.Detail = "Flooding took the area offline for 9 hours. The generator ran out of fuel after 6 hours; the room was down for 30 minutes until a fuel truck arrived."
+			x.Response = "Fuel delivered at 02:00; service back at 02:30."
+			x.Cause = "Tank holds 6 hours at full load; the fuel contract has no delivery time for emergencies."
+			x.Action = "Emergency delivery within 4 hours added to the fuel contract. A bigger tank needs a building permit; decided not to for now."
+			x.Owner = "Facility manager"
+		}), date(-60), "share", 3, 4)},
+	}
+	ids := make([]int, len(seeds))
+	for i, s := range seeds {
+		if s.repeat > 0 {
+			s.RepeatOf = ids[s.repeat-1]
+		}
+		saved, err := add(s.Incident)
+		if err != nil {
+			return fmt.Errorf("demo incident %q: %w", s.Title, err)
 		}
 		ids[i] = saved.ID
 	}

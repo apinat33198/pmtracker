@@ -1,0 +1,95 @@
+{{define "content"}}{{$d := .Data}}{{$v := $d.V}}{{$cat := .Cat}}
+{{if $d.PickSite}}
+<p class="crumb"><a href="/incidents">Incidents</a></p>
+<section class="page-head">
+  <h1>Log an incident</h1>
+  <p class="lede">Something that went wrong in a room, or nearly did: a power or cooling failure, a leak, a fire alarm, a door left open, a wrong breaker switched. Log it while it's happening; the cause and the action can follow. Pick the site first.</p>
+</section>
+<form class="row-form" method="get" action="/incidents/new">
+  <label class="grow">Site <select name="site" required><option value="">Pick a site</option>{{range $d.PickSite}}<option value="{{.ID}}">{{.Code}} {{.Name}}</option>{{end}}</select></label>
+  <button>Next</button>
+</form>
+
+{{else if $d.Form.New}}{{$site := $d.Form.Site}}
+<p class="crumb"><a href="/incidents">Incidents</a><a href="/sites/{{$site.ID}}#incidents">{{$site.Code}} {{$site.Name}}</a></p>
+<section class="page-head">
+  <h1>Log an incident at {{$site.Code}} {{$site.Name}}</h1>
+  <p class="lede">{{with $d.Form.From}}{{.}} {{end}}Fill in what you know now and save; add updates to its timeline as it develops. The reference number is given when it's logged.</p>
+</section>
+{{template "incidentForm" (dict "Form" $d.Form "Page" .)}}
+
+{{else}}
+<p class="crumb"><a href="/incidents">Incidents</a><a href="/sites/{{$v.Site.ID}}#incidents">{{$v.Site.Code}} {{$v.Site.Name}}</a>{{if $v.HasTask}}<a href="/tasks/{{$v.Task.ID}}">{{$cat.SystemName $v.Task.System}} by {{$cat.VendorName $v.Task.Vendor}}</a>{{end}}</p>
+<section class="asset-head">
+  <div>
+    <h1>{{$v.Title}}</h1>
+    <p class="lede"><b>{{$v.Ref}}</b> at {{$v.Site.Code}} {{$v.Site.Name}}. {{$v.KindLabel}}: {{$v.CategoryLabel}}{{if $v.HasTask}}, {{$cat.SystemName $v.Task.System}} (PM by {{$cat.VendorName $v.Task.Vendor}}){{end}}. Logged {{dateTime $v.Created}}{{with $v.By}} by {{.}}{{end}}.</p>
+  </div>
+  <div class="verdict s-{{$v.Tone}}">
+    <span class="pill s-{{$v.Tone}}">{{$v.StatusLabel}}</span> <span class="risk s-{{$v.Risk.Tone}} risk-{{$v.Risk.Key}}">{{$v.Risk.Label}} risk</span>
+    <p>{{$v.Hint}}</p>
+  </div>
+</section>
+
+<dl class="facts">
+  <div><dt>Happened</dt><dd>{{dateTime $v.At}}<span class="sub">{{fromToday $v.At}}</span></dd></div>
+  <div><dt>Noticed</dt><dd>{{if ge $v.NoticeMinutes 0}}{{minutes $v.NoticeMinutes}} later{{else}}At once{{end}}<span class="sub">{{$v.DetectedLabel}}</span></dd></div>
+  <div><dt>Service restored</dt><dd>{{if $v.IsNearMiss}}<span class="sub">Not affected</span>{{else if ge $v.RestoreMinutes 0}}{{dateTime $v.Back}}<span class="sub">after {{minutes $v.RestoreMinutes}}</span>{{else}}<span class="sub late">Not yet</span>{{end}}</dd></div>
+  <div><dt>Follow-up</dt><dd>{{with $v.Owner}}{{.}}{{else}}<span class="sub">Nobody yet</span>{{end}}{{if $v.HasDue}}<span class="sub{{if $v.Late}} late{{end}}">target {{date $v.DueDay}}{{if $v.IsOpen}}, {{dueRel $v.DaysLeft}}{{else if not ($v.Closed.After $v.DueDay)}}, met{{else}}, missed{{end}}</span>{{end}}</dd></div>
+  <div><dt>{{if $v.IsOpen}}Open for{{else}}Closed{{end}}</dt><dd>{{if $v.IsOpen}}{{$v.Age}} {{plural $v.Age "day" "days"}}{{else}}{{date $v.Closed}}<span class="sub">after {{$v.Age}} {{plural $v.Age "day" "days"}}{{with $v.ClosedBy}}, by {{.}}{{end}}</span>{{end}}</dd></div>
+</dl>
+
+<section class="risk-panel" aria-label="Risk rating">
+  <div><span class="label">Actual impact</span><b>{{$v.Impact}} {{$v.ImpactLabel}}</b></div>
+  <div><span class="label">Assessed risk</span><span class="risk s-{{$v.Risk.Tone}} risk-{{$v.Risk.Key}}">{{$v.Risk.Label}}</span> <span class="sub">likelihood {{$v.Risk.Likelihood}} × consequence {{$v.Risk.Consequence}} = {{$v.Risk.Score}}</span></div>
+  <div><span class="label">Treatment</span>{{if $v.Treatment}}<b>{{$v.TreatmentLabel}}</b>{{else}}<span class="sub">Not decided</span>{{end}}</div>
+  <div><span class="label">Residual risk</span>{{if $v.Residual.Rated}}<span class="risk s-{{$v.Residual.Tone}} risk-{{$v.Residual.Key}}">{{$v.Residual.Label}}</span> <span class="sub">{{$v.Residual.Likelihood}} × {{$v.Residual.Consequence}} = {{$v.Residual.Score}}</span>{{else}}<span class="sub">Not re-rated yet</span>{{end}}</div>
+</section>
+
+<dl class="finding-text">
+  {{with $v.Detail}}<div><dt>Details</dt><dd>{{.}}</dd></div>{{end}}
+  <div><dt>Containment and recovery</dt><dd>{{with $v.Response}}{{.}}{{else}}<span class="sub">Nothing recorded yet.</span>{{end}}</dd></div>
+  <div><dt>Root cause</dt><dd>{{with $v.Cause}}{{.}}{{else}}<span class="sub">Not found yet. Ask why until you reach something you can fix.</span>{{end}}</dd></div>
+  <div><dt>Action</dt><dd>{{with $v.Action}}{{.}}{{else}}<span class="sub">Nothing recorded yet.</span>{{end}}</dd></div>
+  {{with $v.Lessons}}<div><dt>Lessons learned</dt><dd>{{.}}</dd></div>{{end}}
+  {{if $d.HasFind}}<div><dt>Linked finding</dt><dd><a href="/findings/{{$d.Finding.ID}}">#{{$d.Finding.ID}} {{$d.Finding.Title}}</a> <span class="sub">found {{date $d.Finding.Found}}, {{lower $d.Finding.StatusLabel}}</span></dd></div>{{end}}
+</dl>
+
+{{if gt (len $d.Chain) 1}}
+<h2>Happened before</h2>
+<p class="hint">The same thing at this site, earlier and later. If it keeps happening, the action didn't reach the cause.</p>
+{{template "incidents" (dict "List" $d.Chain "Page" . "Empty" "" "Current" $v.ID)}}
+{{end}}
+
+<h2 id="timeline">Timeline</h2>
+<p class="hint">Every change and update, as it was saved. Entries can't be edited or removed, so this is the record for audits.</p>
+<ol class="timeline">
+  {{range $d.Timeline}}
+  <li>
+    <span class="when">{{dateTime .At}}</span><span class="who">{{.By}}</span>
+    {{if .First}}<p>Logged.</p>{{end}}
+    {{with .Changes}}<ul class="changes">{{range .}}<li>{{.}}</li>{{end}}</ul>{{end}}
+    {{with .Text}}<p class="note-text">{{.}}</p>{{end}}
+  </li>
+  {{end}}
+</ol>
+{{if .IsEditor}}
+<form class="row-form note-form" method="post" action="/incidents/{{$v.ID}}/note">
+  <label class="grow">Add an update <textarea name="note" rows="2" maxlength="2000" required placeholder="e.g. 14:20 CoolAir on site; compressor 2 replaced, running on test"></textarea></label>
+  <button>Add</button>
+</form>
+{{end}}
+
+{{if .IsEditor}}
+<h2>Update</h2>
+{{template "incidentForm" (dict "Form" $d.Form "Page" .)}}
+<p class="hint small"><a href="/incidents/new?repeat={{$v.ID}}">Log this happening again</a> as a new incident linked to this one.</p>
+{{end}}
+{{if .IsAdmin}}
+<form class="danger" method="post" action="/incidents/{{$v.ID}}/delete">
+  <p>Delete this incident only if it was logged by mistake. An incident that was dealt with should be closed instead: it's the evidence that it was handled. The deletion is kept in the activity log.</p>
+  <button class="danger-button">Delete {{$v.Ref}}</button>
+</form>
+{{end}}
+{{end}}
+{{end}}

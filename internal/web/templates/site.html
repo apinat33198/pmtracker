@@ -39,6 +39,11 @@
 {{template "findings" (dict "List" $d.Findings "Page" . "Empty" "No open findings at this site." "Current" 0)}}
 {{if .IsEditor}}<p class="hint small"><a class="button ghost" href="/findings/new?site={{$ss.Site.ID}}">Log a finding</a></p>{{end}}
 
+<h2 id="incidents">Incidents</h2>
+<p class="hint">Failures, alarms and near misses in this room, until they're closed with the cause treated.{{if $d.AllIncidents}} <a href="/incidents?site={{$ss.Site.ID}}&amp;status=all">All {{$d.AllIncidents}} {{plural $d.AllIncidents "incident" "incidents"}} at this site</a>, with the risk matrix.{{end}}</p>
+{{template "incidents" (dict "List" $d.Incidents "Page" . "Empty" "No open incidents at this site." "Current" 0)}}
+{{if .IsEditor}}<p class="hint small"><a class="button ghost" href="/incidents/new?site={{$ss.Site.ID}}">Log an incident</a></p>{{end}}
+
 <h2 id="jobs">Ad-hoc jobs</h2>
 <p class="hint">One-off work at this site, such as a repair. Jobs don't change any PM date or status.</p>
 {{template "jobs" (dict "Jobs" $d.OpenJobs "Page" . "Actions" true "Empty" "No open jobs at this site.")}}

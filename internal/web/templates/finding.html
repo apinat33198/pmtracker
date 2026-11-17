@@ -46,6 +46,12 @@
   <div><dt>What was done</dt><dd>{{with $v.Action}}{{.}}{{else}}<span class="sub">Nothing recorded yet.</span>{{end}}</dd></div>
 </dl>
 
+{{with $d.Incidents}}
+<h2>Incidents linked to it</h2>
+<p class="hint">Incidents that this finding warned of, or that it came out of.</p>
+{{template "incidents" (dict "List" . "Page" $ "Empty" "" "Current" 0)}}
+{{end}}
+
 {{if gt (len $d.Chain) 1}}
 <h2>Came back</h2>
 <p class="hint">The same thing at this site, earlier and later. If it keeps coming back, the fix didn't reach the cause.</p>
@@ -55,7 +61,7 @@
 {{if .IsEditor}}
 <h2>Update</h2>
 {{template "findingForm" (dict "Form" $d.Form "Page" .)}}
-<p class="hint small"><a href="/findings/new?repeat={{$v.ID}}">Log this coming back</a> as a new finding linked to this one.</p>
+<p class="hint small"><a href="/findings/new?repeat={{$v.ID}}">Log this coming back</a> as a new finding linked to this one, or <a href="/incidents/new?finding={{$v.ID}}">log an incident</a> it led to.</p>
 {{end}}
 {{if .IsAdmin}}
 <form class="danger" method="post" action="/findings/{{$v.ID}}/delete">

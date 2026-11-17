@@ -21,6 +21,9 @@ overview.
   everything is in the activity log, the backups and the Jobs CSV.
 - **Findings (Kaizen):** what PM visits and walks round the rooms turn up,
   followed until it's fixed. See [Findings](#findings) below.
+- **Incidents (ISO 31000):** failures, alarms and near misses, rated on a
+  5 × 5 risk matrix, treated, re-rated and kept with a timeline nobody can
+  edit. See [Incidents](#incidents) below.
 - **Admin:** add, rename, archive and delete sites; add, edit, pause and
   delete PM tasks; set last PM dates; manage vendors, systems and calendars;
   import sites and tasks from CSV; activity log of who changed what. The
@@ -61,6 +64,12 @@ The review inbox holds what the matcher can't place on its own:
 - `[PM] BKK2 UPS`, where two vendors service UPS at that site,
 - `[PM] PTT1 UPS – ABC Power` for a site that doesn't exist yet; add PTT1 in Admin and the event matches,
 - a Thai event with no site, and a sales visit that isn't PM.
+
+The demo also has nine incidents: SRI1's UPS on bypass (extreme, still being
+contained), a near miss with water by a PDU at BKK2, the CNX1 CRAC trip that
+its findings kept warning about, a BKK1 utility outage that happened again,
+and closed ones re-rated after treatment, including an HDY1 outage closed
+with the risk still high (accepted).
 
 `-today 2027-01-15` pretends it's another day; `-keep` keeps your demo changes
 across restarts.
@@ -187,6 +196,51 @@ every 3-month PM round already is.
   Findings CSV.
 - Deleting a site deletes its findings; deleting a PM task keeps its
   findings at the site.
+
+## Incidents
+
+An incident is something that went wrong in a room, or nearly did: a power or
+cooling failure, a leak, a fire alarm, a door left open, a wrong breaker
+switched. Findings are what a PM visit turns up before anything happens;
+incidents are what happened. They follow the ISO 31000 risk process, and the
+fields cover ISO 27001 A.5.25 to A.5.28 (assess, respond, learn, keep
+evidence).
+
+- **Log one** from the Incidents page, a site or task page, or a finding
+  (*log an incident* it led to). Log it while it's happening: the title, kind,
+  when it happened and the rating are enough. Each gets a reference such as
+  `INC-2026-007`, numbered within the year it happened.
+- **Rate it (risk assessment).** *Actual impact* is what happened (none for a
+  near miss). The rating is the *worst credible consequence* × the
+  *likelihood of it happening again*, 1 to 5 each: 1–4 low, 5–9 medium,
+  10–16 high, 20–25 extreme. Rating the worst credible consequence is what
+  makes near misses worth logging. The scales are worded for DC and CSR rooms
+  under *How to rate* on every form; they are the risk criteria ISO 31000
+  asks for, in `internal/core/incidents.go` if your risk policy words them
+  differently.
+- **Respond.** Open → Contained → Service restored → Closed, with the times it
+  was noticed and restored, so the measures show time to restore.
+- **Treat and close.** Closing needs the root cause, the action (corrective
+  and preventive), the treatment (reduce, remove the source, share, avoid or
+  retain) and a *residual* rating with the action in place. Closing with the
+  residual risk still high or extreme accepts that risk, so only an admin can,
+  and their name is recorded.
+- **Timeline.** Every save adds an entry with what changed (status, ratings,
+  owner, who added the root cause…) and any update typed in; *Add an update*
+  adds one on its own. Entries can't be edited or removed. The timeline lives
+  in the incident, so it's kept as long as the incident, not 90 days.
+- **Measures** on the Incidents page, for all sites or one: open (still being
+  contained, high or extreme), actions past their target, median time to
+  restore, median days to close, near misses per incident, repeats and the
+  share noticed by an alarm; a 5 × 5 matrix of open and recent incidents at
+  their current rating (residual once re-rated), by kind and by site.
+  Incidents still being contained, past their target or rated high or
+  extreme go in the daily digest.
+- Incidents never change a PM date, status or the grid. Editors log and
+  update them; only admins delete them (close it instead: it's the evidence).
+  Everything is in the activity log, the backups and the Incidents CSV.
+- A site with incidents can't be deleted; archive it. Deleting a PM task or a
+  finding keeps the incident, without the link.
 
 ## Sign-in and users
 
@@ -449,10 +503,12 @@ internal/auth      password hashing, signed session cookies, failed sign-in limi
 internal/config    JSON config: server, Google, defaults, auth options, roles
 internal/core      catalog (sites, systems, vendors, tasks, calendars), matcher,
                    forecaster, snapshot with site and vendor roll-ups, ad-hoc
-                   jobs, findings and their measures, CSV import, digest, ICS feed
+                   jobs, findings and incidents with their measures and risk
+                   matrix, CSV import, digest, ICS feed
 internal/gcal      service-account client, events.list paging, syncer with 410 recovery
 internal/store     JSON-file store: catalog, mirrored events, decisions, rules,
-                   marks, hand-recorded visits, ad-hoc jobs, findings, change log, accounts and the
+                   marks, hand-recorded visits, ad-hoc jobs, findings, incidents,
+                   change log, accounts and the
                    session key; the activity log in its own daily files
 internal/backup    daily backups, pruning, restore input
 internal/web       pages, sign-in, setup, accounts, admin handlers, role checks,
@@ -468,7 +524,39 @@ or calendars are deleted, sync against a fake Google API, every page
 rendering, roles, the admin lifecycle (create, rename, add/edit/delete
 task, archive, delete), and sign-in: sessions, tampered cookies, cross-site
 posts, open redirects, lockout, first-run setup, user management and the
-last-admin guard.
+last-admin guard; findings and incidents: validation, links and repeats,
+risk ratings and the matrix, timelines that can't be rewritten, who may
+close a high residual risk, restore checks, and the demo data.
+
+## Storage in production
+
+One JSON file is enough at this size. Measured with years of
+production-like data (21 sites, 69 PM tasks, quarterly visits plus 8 other
+events per task a year in the shared calendars, 150 findings a year), on 2
+vCPUs; a 1-core container is slower:
+
+| History kept | Events | File | Each save | Each page |
+| --- | --- | --- | --- | --- |
+| 1 year | 828 | 0.9 MB | 11 ms | 18 ms |
+| 2 years (the sync window) | 1,656 | 1.7 MB | 22 ms | 49 ms |
+| 5 years | 4,140 | 4.2 MB | 60 ms | 105 ms |
+| 10 years | 8,280 | 8.5 MB | 102 ms | 197 ms |
+
+Things to know before relying on it:
+
+- **Up to a day can be lost.** Backups are daily and, by default, on the same
+  disk. Point `backup.dir` at a mounted share and back the container up with
+  Proxmox Backup Server.
+- **A restore replaces everything**, including incidents and findings logged
+  after that backup. Use it for disasters; fix mistakes by editing.
+- **Calendar history older than `sync_lookback_months`** (24) is dropped when
+  Google invalidates the sync token and the tracker re-reads everything. If
+  audits need three years of PM history, set it to 36.
+- A sync that finds nothing new doesn't rewrite the file.
+
+SQLite (pure Go, still one static binary) is the next step once visit reports
+and photos are attached, the file passes about 5 MB, or more history has to
+be kept. See `docs/incidents-and-storage.md`.
 
 ## Limits and next steps
 
